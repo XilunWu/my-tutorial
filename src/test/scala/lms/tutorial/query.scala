@@ -265,18 +265,26 @@ trait Engine extends QueryProcessor with SQLParser {
   def eval: Unit
   def prepare: Unit = {}
   val scan_t1gram = Scan("?",Some(Schema("Phrase", "Year", "MatchCount", "VolumeCount")),Some('\t'))
-  val expectedAstForTest = List(Filter(Eq(Field("Phrase"), Value("Auswanderung")), scan_t1gram),
-				HashJoin(
+  val expectedAstForTest = List(
+/*
+                                Filter(Eq(Field("Phrase"), Value("Auswanderung")), scan_t1gram),
+*/
+                                HashJoin(
 				    HashJoin(
-					scan_t1gram,
-					Filter(Eq(Field("Phrase"), Value("Auswanderung")), scan_t1gram)),
-				    Filter(Eq(Field("Phrase"), Value("Auswanderung")), scan_t1gram)
+					HashJoin(
+					    scan_t1gram,
+					    Filter(Eq(Field("Phrase"), Value("Auswanderung")), scan_t1gram)),
+					Filter(Eq(Field("Phrase"), Value("Auswanderung")), scan_t1gram)
+				    ),					
+				    scan_t1gram
 				),
+
 				LFTJoin(
 				    List(
 					scan_t1gram,
 					Filter(Eq(Field("Phrase"), Value("Auswanderung")), scan_t1gram),
-					Filter(Eq(Field("Phrase"), Value("Auswanderung")), scan_t1gram)
+					Filter(Eq(Field("Phrase"), Value("Auswanderung")), scan_t1gram),
+					scan_t1gram
 				    )
 				)
 			       )

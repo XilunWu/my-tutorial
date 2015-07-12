@@ -18,6 +18,7 @@ trait QueryInterpreter extends PlainQueryProcessor {
 Trie-Join
 --------------------------
 */
+object lftJoin{
 import scala.collection.mutable.{ArrayBuffer, ListBuffer, Stack, HashMap}
 
 class Node(val key: String){
@@ -228,6 +229,8 @@ class Leapfrog(var iter: List[Relation]) {
 class TrieJoin(RData: ArrayBuffer[ArrayBuffer[Record]], RVar: ArrayBuffer[Schema]) {
     val leapfrog = ArrayBuffer[Leapfrog]()
     val iter = ArrayBuffer[Relation]()
+    val schema = ArrayBuffer[String]()
+
     var depth = -1
     init
     
@@ -248,10 +251,10 @@ class TrieJoin(RData: ArrayBuffer[ArrayBuffer[Record]], RVar: ArrayBuffer[Schema
 		vname =>
 		    hm.get(vname) match {
 			case None =>
-			    {
 				depth += 1
 				hm += (vname -> depth)
-			    }
+				schema += vname
+
 			case Some(n) =>
 		    }
 		val d = hm.getOrElse(vname, -1)
@@ -289,7 +292,7 @@ class TrieJoin(RData: ArrayBuffer[ArrayBuffer[Record]], RVar: ArrayBuffer[Schema
 	}
     }
 
-    def run = {
+    def run (yld: Record => Unit) = {
 	var lfj: Leapfrog  = null
 	val res = Stack[String]()
 
@@ -319,14 +322,15 @@ class TrieJoin(RData: ArrayBuffer[ArrayBuffer[Record]], RVar: ArrayBuffer[Schema
 		needToInit = true
 	    }
 	    else {
-		res foreach {r => print(r + " ")}
-		println(lfj.key)
+		res.push(lfj.key)
+		yld(Record(res.toVector.reverse, schema.toVector))
+		res.pop
 		lfj.next
 	    }
 	}
     }
 }
-
+}
 /**
 Low-Level Processing Logic
 --------------------------
@@ -369,7 +373,7 @@ Query Interpretation
     case Value(x) => x.toString
   }
 
-  import scala.collection.mutable.{ArrayBuffer,HashMap}
+  import scala.collection.mutable.{ArrayBuffer,HashMap,HashSet}
 
   def resultSchema(o: Operator): Schema = o match {
     case Scan(_, schema, _, _)   => schema
@@ -378,6 +382,19 @@ Query Interpretation
     case Join(left, right)       => resultSchema(left) ++ resultSchema(right)
     case Group(keys, agg, parent)=> keys ++ agg
     case HashJoin(left, right)   => resultSchema(left) ++ resultSchema(right)
+    case LFTJoin(parents)        => 
+	val schema = ArrayBuffer[String]()
+	val hs = HashSet[String]()
+        parents foreach {
+	    resultSchema(_) foreach { vname =>
+				      if (!hs.contains(vname)) {
+					  hs += vname
+  					  schema += vname
+				      }
+	    }
+	}
+        schema.toVector
+
     case PrintCSV(parent)        => Schema()
   }
 
@@ -396,21 +413,6 @@ Query Interpretation
             yld(Record(rec1.fields ++ rec2.fields, rec1.schema ++ rec2.schema))
         }
       }
-/*
-    case HashJoin(left, right) =>
-	val RRecords = ArrayBuffer[ArrayBuffer[Record]]()
-        val RVar = ArrayBuffer[Schema]()
-        val parents = List(left, right)
-        parents.foreach { parent =>
-            RRecords += ArrayBuffer[Record]()
-            RVar += resultSchema(parent)			  
-            execOp(parent) { rec =>
-		RRecords.last += rec
-	    }
-	}
-      val triejoin = new TrieJoin(RRecords, RVar)
-      triejoin.run
-*/
     case Group(keys, agg, parent) =>
       val hm = new HashMap[Fields,Seq[Int]]
       execOp(parent) { rec =>
@@ -428,11 +430,13 @@ Query Interpretation
         val buf = hm.getOrElseUpdate(rec1(keys), new ArrayBuffer[Record])
         buf += rec1
       }
+utils.time{
       execOp(right) { rec2 =>
         hm.get(rec2(keys)) foreach { _.foreach { rec1 =>
           yld(Record(rec1.fields ++ rec2.fields, rec1.schema ++ rec2.schema))
         }}
       }
+}
     case LFTJoin(parents) =>
 	val RRecords = ArrayBuffer[ArrayBuffer[Record]]()
         val RVar = ArrayBuffer[Schema]()
@@ -443,8 +447,8 @@ Query Interpretation
 		RRecords.last += rec
 	    }
 	}
-      val triejoin = new TrieJoin(RRecords, RVar)
-      triejoin.run
+      val triejoin = new lftJoin.TrieJoin(RRecords, RVar)
+      utils.time(triejoin.run(yld))
 
     case PrintCSV(parent) =>
       val schema = resultSchema(parent)
