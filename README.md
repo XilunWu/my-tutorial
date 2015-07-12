@@ -30,4 +30,5 @@ Browse the sources
 TODO
 ----------
 
-Merge LFT-Join into lms-tutorial
+Measure performance
+Rewrite lft-join
