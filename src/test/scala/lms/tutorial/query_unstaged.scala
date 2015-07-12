@@ -396,6 +396,7 @@ Query Interpretation
             yld(Record(rec1.fields ++ rec2.fields, rec1.schema ++ rec2.schema))
         }
       }
+/*
     case HashJoin(left, right) =>
 	val RRecords = ArrayBuffer[ArrayBuffer[Record]]()
         val RVar = ArrayBuffer[Schema]()
@@ -409,7 +410,7 @@ Query Interpretation
 	}
       val triejoin = new TrieJoin(RRecords, RVar)
       triejoin.run
-
+*/
     case Group(keys, agg, parent) =>
       val hm = new HashMap[Fields,Seq[Int]]
       execOp(parent) { rec =>
@@ -420,7 +421,6 @@ Query Interpretation
       hm foreach { case (k,a) =>
         yld(Record(k ++ a.map(_.toString), keys ++ agg))
       }
-/*
     case HashJoin(left, right) =>
       val keys = resultSchema(left) intersect resultSchema(right)
       val hm = new HashMap[Fields,ArrayBuffer[Record]]
@@ -433,7 +433,6 @@ Query Interpretation
           yld(Record(rec1.fields ++ rec2.fields, rec1.schema ++ rec2.schema))
         }}
       }
-*/
     case LFTJoin(parents) =>
 	val RRecords = ArrayBuffer[ArrayBuffer[Record]]()
         val RVar = ArrayBuffer[Schema]()
