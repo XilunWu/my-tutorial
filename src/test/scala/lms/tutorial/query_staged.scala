@@ -247,6 +247,11 @@ object query_staged {
       Trie-Join
       --------------------------
       */
+
+    /**
+      Use TrieArray to replace traditional Node Tree
+      */
+    
     object lftJoin{
       import scala.collection.mutable.{ArrayBuffer, ListBuffer, Stack, HashMap}
 
