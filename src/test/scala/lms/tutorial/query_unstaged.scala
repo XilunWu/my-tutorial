@@ -66,6 +66,7 @@ object query_unstaged {
       case Join(left, right)       => resultSchema(left) ++ resultSchema(right)
       case Group(keys, agg, parent)=> keys ++ agg
       case HashJoin(left, right)   => resultSchema(left) ++ resultSchema(right)
+        /*
       case LFTJoin(parents)        =>
 	val schema = ArrayBuffer[String]()
 	val hs = HashSet[String]()
@@ -78,7 +79,7 @@ object query_unstaged {
 	  }
 	}
         schema.toVector
-
+         */
       case PrintCSV(parent)        => Schema()
     }
 
@@ -121,6 +122,7 @@ object query_unstaged {
 	    }}
 	  }
 	}
+        /*
       case LFTJoin(parents) =>
 	val RRecords = ArrayBuffer[ArrayBuffer[Record]]()
         val RVar = ArrayBuffer[Schema]()
@@ -133,7 +135,7 @@ object query_unstaged {
 	}
 	val triejoin = new lftJoin.TrieJoin(RRecords, RVar)
 	utils.time(triejoin.run(yld))
-
+         */
       case PrintCSV(parent) =>
 	val schema = resultSchema(parent)
 	printSchema(schema)
@@ -308,7 +310,7 @@ object query_unstaged {
 	val iter = ArrayBuffer[Relation]()
 	val schema = ArrayBuffer[String]()
 	var depth = -1
-	init()
+	init
 	
 	def init = {
 	  val hm = new HashMap[String, Int]
