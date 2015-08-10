@@ -253,20 +253,22 @@ object query_staged {
       */
     
     object lftJoin{
-      class TrieArray (schema:Schema) {
-        val values = NewArray[Rep[Array[String]]](schema.length)
-        val indices = NewArray[Rep[Array[Int]]](schema.length)
+      import hashDefaults._
 
-        val curr = var_new(0)
-        val pos = NewArray[Int](schema.length)  //why not NewArray[Rep[Int]]?
+      class TrieArray (schema:Schema) {
+        val values = schema.map(f => NewArray[String](dataSize))
+        val indices = NewArray[Array[Int]](schema.length)
+
+        var curr = 0
+        val pos = NewArray[Int](schema.length)
 
         /**
           Trie iterator interface
           */
         def key: Rep[String] = {
-          val levelPos = curr: Rep[Int];
+          val levelPos = curr
           val dataPos = pos(levelPos);
-          values(dataPos)(pos(dataPos))
+          values(levelPos)(pos(dataPos))
         }//force read
         def next: Rep[Unit] = pos(curr) = pos(curr) + 1
         def atEnd: Rep[Boolean] = {
