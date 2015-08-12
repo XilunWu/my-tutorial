@@ -256,30 +256,48 @@ object query_staged {
       import hashDefaults._
 
       class TrieArray (schema:Schema) {
+        //Vector[Rep[Array[String Or Int]]]
         val values = schema.map(f => NewArray[String](dataSize))
-        val indices = NewArray[Array[Int]](schema.length)
+        val indices = schema.map(f => NewArray[Int](dataSize))
 
-        var curr = 0
+        var curr: Rep[Int] = 0
         val pos = NewArray[Int](schema.length)
+
+        implicit def RepIntToInt(i: Rep[Int]) = i match {
+          case 0 => 0
+          case 1 => 1
+          case 2 => 2
+          case 3 => 3
+          case 4 => 4
+          case 5 => 5
+          case 6 => 6
+          case 7 => 7
+          case 8 => 8
+          case 9 => 9
+          case 10 => 10
+          case 11 => 11
+          case 12 => 12
+          case 13 => 13
+          case 14 => 14
+          case _ => 15 
+        }
 
         /**
           Trie iterator interface
           */
         def key: Rep[String] = {
-          val levelPos = curr
-          val dataPos = pos(levelPos);
-          values(levelPos)(pos(dataPos))
+          values(curr)(pos(curr))
         }//force read
         def next: Rep[Unit] = pos(curr) = pos(curr) + 1
         def atEnd: Rep[Boolean] = {
-          if (pos(curr) == levels(curr).value.length - 1) true
-          else if (curr != 0 && currPos == levels(curr - 1).index(pos(curr - 1) + 1)) true
+          if (pos(curr) == values(curr).length - 1) true
+          else if (curr != 0 && pos(curr) == indices(curr - 1)(pos(curr - 1) + 1)) true
           else false
         }
         def seek: Rep[Unit] = {
           //put currPos onto correct position where key is the first key which >= seekKey
         }
-        def open: Rep[Unit] = {pos(curr + 1) = levels(curr).index(pos(curr)); curr += 1}
+        def open: Rep[Unit] = {pos(curr + 1) = indices(curr)(pos(curr)); curr += 1}
         def up: Rep[Unit] = curr -= 1
 
         //ser curr, currPos, parentPos, etc. It does the same thing as the first call open()
