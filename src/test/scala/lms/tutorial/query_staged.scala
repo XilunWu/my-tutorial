@@ -255,7 +255,7 @@ object query_staged {
     object lftJoin{
       import hashDefaults._
 
-      class TrieArray (schema:Schema) {
+      class TrieArray (schema: Schema) {
         //Vector[Rep[Array[String Or Int]]]
         val values = schema.map(f => NewArray[String](dataSize))
         val indices = schema.map(f => NewArray[Int](dataSize))
@@ -307,6 +307,13 @@ object query_staged {
 
         def insert(f: Fields): Rep[Unit] = {}
         def build: Rep[Unit] = {}
+      }
+      class LFTJoin (schemas: List[Schema]) {
+        val relations = schemas.map(s => new TrieArray(s))
+
+        //Build relation trie
+        def init: Rep[Unit] =
+        def run (yld: Record => Rep[Unit]): Rep[Unit] = {}
       }
     }
 }}
