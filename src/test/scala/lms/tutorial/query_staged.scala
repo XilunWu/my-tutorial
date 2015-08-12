@@ -294,8 +294,19 @@ object query_staged {
           else if (curr != 0 && pos(curr) == indices(curr - 1)(pos(curr - 1) + 1)) true
           else false
         }
-        def seek: Rep[Unit] = {
+        def seek(seekKey: Rep[String]): Rep[Unit] = {
           //put currPos onto correct position where key is the first key which >= seekKey
+          val parentIdxArray = indices(curr - 1)
+          val start = parentIdxArray(pos(curr - 1))
+          val end = parentIdxArray(pos(curr - 1) + 1)
+          binSearch(seekKey, start, end)
+        /**
+          Helper function
+          */
+          def binSearch(seekKey: Rep[String], start: Rep[Int], end: Rep[Int]): Rep[Unit] = start match {
+            case end => pos(curr) = start
+            case _ => val currValArray = values(curr); if (currValArray((start + end) / 2) <= seekKey) {val newStart = (start + end) / 2 + 1; binSearch(seekKey, newStart, end)} else {val newEnd = (start + end) / 2; binSearch(seekKey, start, newEnd)}
+          }
         }
         def open: Rep[Unit] = {pos(curr + 1) = indices(curr)(pos(curr)); curr += 1}
         def up: Rep[Unit] = curr -= 1
@@ -306,13 +317,13 @@ object query_staged {
         }
 
         def insert(f: Fields): Rep[Unit] = {}
-        def build: Rep[Unit] = {}
+        //        def build: Rep[Unit] = {}
       }
       class LFTJoin (schemas: List[Schema]) {
         val relations = schemas.map(s => new TrieArray(s))
 
-        //Build relation trie
-        def init: Rep[Unit] =
+        //Get the info of schema as well as its order
+        def init: Unit = {}
         def run (yld: Record => Rep[Unit]): Rep[Unit] = {}
       }
     }
