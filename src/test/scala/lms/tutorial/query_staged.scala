@@ -241,24 +241,55 @@ object query_staged {
       }
     }
 
+    class TrieArrayBuffer[T:Manifest] (dataSize: Int, schema: Schema){
+      val valBuf = schema.map(f => NewArray[T](dataSize))
+      val idxBuf = schema.map(f => NewArray[Int](dataSize))
+      val len = schema.map(f => var_new(0))
+      def += (x: Fields) = {    //Maintain the order of both arrays
+        for (i <- 0 until len.length){
+          if (i == 0) {start = 0; end = len(0)}
+          val currValBuf = valBuf(i)
+          val currIdxBuf = idxBuf(i)
+          val idx = findSlotToInsert(i, start, end, x(i))
+          if (idx == end){
+            currValBuf(idx) = x(i)
+            currIdxBuf =
+          } else if (currValBuf(idx) == x(i)){
+          
+          } else {
+
+          }//change len(i)
+         }
+
+        def findSlotToInsert(level: Int, start: Rep[Int], end: Rep[Int], x: Rep[String]): Rep[Int]{
+          val currValBuf = valBuf(level)
+          var i = start
+          while (i < end && currValBuf(i) < x) i += 1
+          i
+        }
+       }
+       def toArray{}
+     }
 
 
-    /**
-      Trie-Join
-      --------------------------
-      */
+     /**
+       Trie-Join
+       --------------------------
+       */
 
-    /**
-      Use TrieArray to replace traditional Node Tree
-      */
-    
-    object lftJoin{
-      import hashDefaults._
+     /**
+       Use TrieArray to replace traditional Node Tree
+       */
 
-      class TrieArray (schema: Schema) {
-        //Vector[Rep[Array[String Or Int]]]
-        val values = schema.map(f => NewArray[String](dataSize))
-        val indices = schema.map(f => NewArray[Int](dataSize))
+     object lftJoin{
+       import hashDefaults._
+
+       class TrieArray (schema: Schema) {
+         //Vector[Rep[Array[String Or Int]]]
+         val values = schema.map(f => NewArray[String](dataSize))
+         val indices = schema.map(f => NewArray[Int](dataSize))
+
+        val trieArrayBuf = new TrieArrayBuffer[String](dataSize, schema)
 
         var curr: Rep[Int] = 0
         val pos = NewArray[Int](schema.length)
