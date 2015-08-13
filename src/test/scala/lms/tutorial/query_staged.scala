@@ -316,11 +316,20 @@ object query_staged {
 
         }
 
-        def insert(f: Fields): Rep[Unit] = {}
+        def insert(f: Fields): Rep[Unit] = {
+          for (i <- 0 until f.length) {
+            val currValArray = values(i)
+            val currIdxArray = indices(i)
+
+          }
+
+        }
         //        def build: Rep[Unit] = {}
       }
       class LFTJoin (schemas: List[Schema]) {
-        val relations = schemas.map(s => new TrieArray(s))
+        //Register firstly
+        init  //register schemas
+        val relations = modifiedSchemas.map(s => new TrieArray(s))
 
         //Get the info of schema as well as its order
         def init: Unit = {}
