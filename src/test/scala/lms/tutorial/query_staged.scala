@@ -229,6 +229,9 @@ object query_staged {
     class ArrayBuffer[T:Manifest](dataSize: Int, schema: Schema) {
       val buf = schema.map(f => NewArray[T](dataSize))
       var len = 0
+      def insertWithOrder(x: Seq[Rep[T]]) = {  //Actually comparison method is needed but here we omit it
+        var i = 0
+      }
       def +=(x: Seq[Rep[T]]) = {
         this(len) = x
         len += 1
@@ -239,8 +242,15 @@ object query_staged {
       def apply(i: Rep[Int]) = {
         buf.map(b => b(i))
       }
+      def toArray = {}
     }
 
+
+      /**
+        * Use other structure in construction. E.g. Sorted Table
+        * after construction, transform it into an array
+        */
+/*
     class TrieArrayBuffer[T:Manifest] (dataSize: Int, schema: Schema){
       val valBuf = schema.map(f => NewArray[T](dataSize))
       val idxBuf = schema.map(f => NewArray[Int](dataSize))
@@ -253,9 +263,10 @@ object query_staged {
           val idx = findSlotToInsert(i, start, end, x(i))
           if (idx == end){
             currValBuf(idx) = x(i)
-            currIdxBuf =
+            currIdxBuf = len(i + 1)
+            len(i) += 1
           } else if (currValBuf(idx) == x(i)){
-          
+
           } else {
 
           }//change len(i)
@@ -268,9 +279,9 @@ object query_staged {
           i
         }
        }
-       def toArray{}
-     }
 
+     }
+ */
 
      /**
        Trie-Join
@@ -348,11 +359,6 @@ object query_staged {
         }
 
         def insert(f: Fields): Rep[Unit] = {
-          for (i <- 0 until f.length) {
-            val currValArray = values(i)
-            val currIdxArray = indices(i)
-
-          }
 
         }
         //        def build: Rep[Unit] = {}
