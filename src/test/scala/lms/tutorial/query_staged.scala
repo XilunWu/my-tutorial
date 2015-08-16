@@ -229,9 +229,7 @@ object query_staged {
     class ArrayBuffer[T:Manifest](dataSize: Int, schema: Schema) {
       val buf = schema.map(f => NewArray[T](dataSize))
       var len = 0
-      def insertWithOrder(x: Seq[Rep[T]]) = {  //Actually comparison method is needed but here we omit it
-        var i = 0
-      }
+
       def +=(x: Seq[Rep[T]]) = {
         this(len) = x
         len += 1
@@ -242,46 +240,12 @@ object query_staged {
       def apply(i: Rep[Int]) = {
         buf.map(b => b(i))
       }
-      def toArray = {}
     }
-
 
       /**
         * Use other structure in construction. E.g. Sorted Table
         * after construction, transform it into an array
         */
-/*
-    class TrieArrayBuffer[T:Manifest] (dataSize: Int, schema: Schema){
-      val valBuf = schema.map(f => NewArray[T](dataSize))
-      val idxBuf = schema.map(f => NewArray[Int](dataSize))
-      val len = schema.map(f => var_new(0))
-      def += (x: Fields) = {    //Maintain the order of both arrays
-        for (i <- 0 until len.length){
-          if (i == 0) {start = 0; end = len(0)}
-          val currValBuf = valBuf(i)
-          val currIdxBuf = idxBuf(i)
-          val idx = findSlotToInsert(i, start, end, x(i))
-          if (idx == end){
-            currValBuf(idx) = x(i)
-            currIdxBuf = len(i + 1)
-            len(i) += 1
-          } else if (currValBuf(idx) == x(i)){
-
-          } else {
-
-          }//change len(i)
-         }
-
-        def findSlotToInsert(level: Int, start: Rep[Int], end: Rep[Int], x: Rep[String]): Rep[Int]{
-          val currValBuf = valBuf(level)
-          var i = start
-          while (i < end && currValBuf(i) < x) i += 1
-          i
-        }
-       }
-
-     }
- */
 
      /**
        Trie-Join
@@ -294,16 +258,6 @@ object query_staged {
 
      object lftJoin{
        import hashDefaults._
-
-       class TrieArray (schema: Schema) {
-         //Vector[Rep[Array[String Or Int]]]
-         val values = schema.map(f => NewArray[String](dataSize))
-         val indices = schema.map(f => NewArray[Int](dataSize))
-
-        val trieArrayBuf = new TrieArrayBuffer[String](dataSize, schema)
-
-        var curr: Rep[Int] = 0
-        val pos = NewArray[Int](schema.length)
 
         implicit def RepIntToInt(i: Rep[Int]) = i match {
           case 0 => 0
@@ -324,6 +278,52 @@ object query_staged {
           case _ => 15 
         }
 
+       class StringArrayBuffer(dataSize: Int, schema: Schema) {
+         val buf = schema.map(f => NewArray[String](dataSize))
+         var len = 0
+
+         def insertWithOrder(x: Seq[Rep[String]]) = {  //Actually comparison method is needed but here we omit it
+           def findSlotToInsert(start: Rep[Int], end: Rep[Int], x: Seq[Rep[String]]): Rep[Int] = {
+             def lessThan(x: Seq[Rep[String]], y: Seq[Rep[String]]): Rep[Boolean] = {
+               for (i <- 0 until x.length)
+                 if (i == y.length) return(false)
+                 else if (x(i) < y(i)) return(true)
+                 else if(x(i) > y(i)) return(false)
+               return (true)
+             }
+
+             if (start == end) end
+             else if (lessThan(this((start + end) / 2), x)) findSlotToInsert((start + end) / 2 + 1, end, x)
+             else if (this((start + end) / 2) equals x) (start + end) / 2
+             else findSlotToInsert(start, (start + end) / 2, x)
+           }
+           var i = 0
+           val idx = findSlotToInsert(i, len, x)
+           for (j <- len until idx) this(j) = this(j - 1)
+           this(idx) = x
+           len += 1
+         }
+         def +=(x: Seq[Rep[String]]) = {
+           this(len) = x
+           len += 1
+         }
+         def update(i: Rep[Int], x: Seq[Rep[String]]) = {
+           (buf,x).zipped.foreach((b,x) => b(i) = x)
+         }
+         def apply(i: Rep[Int]) = {
+           buf.map(b => b(i))
+         }
+         def toArray = {
+
+         }
+       }
+
+       class TrieArray (schema: Schema) {
+         //Vector[Rep[Array[String Or Int]]]
+        var values: Vector[Rep[Array[String]]] = null
+        val indices: Vector[Rep[Array[Int]]] = null
+        var curr: Rep[Int] = 0
+        val pos = NewArray[Int](schema.length)
         /**
           Trie iterator interface
           */
@@ -346,7 +346,7 @@ object query_staged {
           Helper function
           */
           def binSearch(seekKey: Rep[String], start: Rep[Int], end: Rep[Int]): Rep[Unit] = start match {
-            case end => pos(curr) = start
+            case `end` => pos(curr) = start
             case _ => val currValArray = values(curr); if (currValArray((start + end) / 2) <= seekKey) {val newStart = (start + end) / 2 + 1; binSearch(seekKey, newStart, end)} else {val newEnd = (start + end) / 2; binSearch(seekKey, start, newEnd)}
           }
         }
@@ -365,6 +365,7 @@ object query_staged {
       }
       class LFTJoin (schemas: List[Schema]) {
         //Register firstly
+        var modifiedSchemas: List[Schema] = null
         init  //register schemas
         val relations = modifiedSchemas.map(s => new TrieArray(s))
 
