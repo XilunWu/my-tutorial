@@ -242,10 +242,6 @@ object query_staged {
       }
     }
 
-      /**
-        * Use other structure in construction. E.g. Sorted Table
-        * after construction, transform it into an array
-        */
 
      /**
        Trie-Join
@@ -278,44 +274,8 @@ object query_staged {
           case _ => 15 
         }
 
-       class StringArrayBuffer(dataSize: Int, schema: Schema) {
-         val buf = schema.map(f => NewArray[String](dataSize))
-         var len = 0
+       class TrieArrayBuffer (schema: Schema) {
 
-         def insertWithOrder(x: Seq[Rep[String]]) = {  //Actually comparison method is needed but here we omit it
-           def findSlotToInsert(start: Rep[Int], end: Rep[Int], x: Seq[Rep[String]]): Rep[Int] = {
-             def lessThan(x: Seq[Rep[String]], y: Seq[Rep[String]]): Rep[Boolean] = {
-               for (i <- 0 until x.length)
-                 if (i == y.length) return(false)
-                 else if (x(i) < y(i)) return(true)
-                 else if(x(i) > y(i)) return(false)
-               return (true)
-             }
-
-             if (start == end) end
-             else if (lessThan(this((start + end) / 2), x)) findSlotToInsert((start + end) / 2 + 1, end, x)
-             else if (this((start + end) / 2) equals x) (start + end) / 2
-             else findSlotToInsert(start, (start + end) / 2, x)
-           }
-           var i = 0
-           val idx = findSlotToInsert(i, len, x)
-           for (j <- len until idx) this(j) = this(j - 1)
-           this(idx) = x
-           len += 1
-         }
-         def +=(x: Seq[Rep[String]]) = {
-           this(len) = x
-           len += 1
-         }
-         def update(i: Rep[Int], x: Seq[Rep[String]]) = {
-           (buf,x).zipped.foreach((b,x) => b(i) = x)
-         }
-         def apply(i: Rep[Int]) = {
-           buf.map(b => b(i))
-         }
-         def toArray = {
-
-         }
        }
 
        class TrieArray (schema: Schema) {
