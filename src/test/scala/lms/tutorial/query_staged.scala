@@ -11,9 +11,30 @@ package scala.lms.tutorial
 import scala.virtualization.lms.common._
 
 object query_staged {
+
+
   trait QueryCompiler extends Dsl with StagedQueryProcessor
       with ScannerBase {
     override def version = "query_staged"
+
+    implicit def RepIntToInt(i: Rep[Int]): Int = i match {
+       case 0 => 0
+       case 1 => 1
+       case 2 => 2
+       case 3 => 3
+       case 4 => 4
+       case 5 => 5
+       case 6 => 6
+       case 7 => 7
+       case 8 => 8
+       case 9 => 9
+       case 10 => 10
+       case 11 => 11
+       case 12 => 12
+       case 13 => 13
+       case 14 => 14
+       case _ => 15
+     }
 
     /**
       Low-Level Processing Logic
@@ -241,35 +262,35 @@ object query_staged {
         buf.map(b => b(i))
       }
       //sort the whole buf with function fieldsLessThan
-      def sortWith(lt: (Rep[T], Rep[T]) => Rep[Boolean]): Rep[Unit] = {
+      def sortWith(lt: (Rep[Array[T]], Rep[Array[T]]) => Rep[Boolean]): Rep[Unit] = {
         val length = len: Rep[Int]
         sortHelper(0, length, lt)
 
-        def sortHelper(start: Rep[Int], end: Rep[Int], lt: (Rep[T], Rep[T]) => Rep[Boolean]) = {
+        def sortHelper(start: Rep[Int], end: Rep[Int], lt: (Rep[Array[T]], Rep[Array[T]]) => Rep[Boolean]): Rep[Unit] = {
           if (end - start < 10) bubbleSort(start, end, lt)
           else {
             val pivot = buf(start + (end - start) / 2)
-            val arr = schema.map(f => NewArray[T](end - start))
+            val arr = new ArrayBuffer[String](end - start, schema)
             var i = start
-            while (i < end) arr.update(i - satrt, buf(i)) 
+            while (i < end) {arr.update(i - start, buf(i)); i += 1}
             i = start
-            j = end - 1
-            for (x <- arr) {if (lt(x, pivot)) {buf.update(i, x); i += 1} else {buf.update(j, x); j -= 1}}
+            var j = end - 1
+            for (x <- arr.buf) {if (lt(x, pivot)) {this.update(i, x); i += 1} else {this.update(j, x); j -= 1}}
             sortHelper(start, i, lt)
             sortHelper(i + 1, end, lt)
           }
         }
-        def bubbleSort(start: Rep[Int], end: Rep[Int], lt: (Rep[T], Rep[T]) => Rep[Boolean]) = {
+        def bubbleSort(start: Rep[Int], end: Rep[Int], lt: (Rep[Array[T]], Rep[Array[T]]) => Rep[Boolean]) = {
           var i = end - 1
           while (i > 0){
-            j = 0
+            var j = 0
             while (j < i){
-              if (lt(buf(j + 1, j))) {
+              if (lt(buf(j + 1), buf(j))) {
                 val tmp = Vector[Rep[T]](schema.sizes)
                 var k = 0
                 for(x <- buf(j)) {tmp(k) = x; k += 1}
-                buf.update(j, buf(j + 1))
-                buf.update(j + 1, tmp)
+                this.update(j, buf(j + 1))
+                this.update(j + 1, tmp)
               }
               j += 1
             }
@@ -297,7 +318,7 @@ object query_staged {
 
        import trieArrayDefaults._
 
-       implicit def RepIntToInt(i: Rep[Int]) = i match {
+       implicit def RepIntToInt(i: Rep[Int]): Int = i match {
          case 0 => 0
          case 1 => 1
          case 2 => 2
