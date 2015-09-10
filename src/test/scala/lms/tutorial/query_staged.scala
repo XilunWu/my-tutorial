@@ -144,6 +144,7 @@ object query_staged {
         val indexArray = schema.map(f => NewArray[Int](dataSize))
         val elem = NewArray[String](schema.length)
         val next = NewArray[Int](schema.length)
+        val lenOfArray = NewArray[Int](schema.length)
         //PrimitiveOps.scala:  implicit def intToRepInt(x: Int) = unit(x)  
 
         var i = 0
@@ -173,6 +174,8 @@ object query_staged {
           i += 1
         }
 
+        j = 0
+        next foreach {x => lenOfArray(j) = x; j += 1}
       }
     }
 
