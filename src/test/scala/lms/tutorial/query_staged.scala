@@ -76,6 +76,8 @@ object query_staged {
       case Group(keys, agg, parent)=> keys ++ agg
       case HashJoin(left, right)   => resultSchema(left) ++ resultSchema(right)
       case PrintCSV(parent)        => Schema()
+      //Only for test
+      case LFTJoin(parents)        => resultSchema(parents(0))
     }
 
     def execOp(o: Operator)(yld: Record => Rep[Unit]): Rep[Unit] = o match {
@@ -116,6 +118,14 @@ object query_staged {
         val schema = resultSchema(parent)
         printSchema(schema)
         execOp(parent) { rec => printFields(rec.fields) }
+      case LFTJoin(parents) => 
+        parents foreach { p =>
+          val schema = resultSchema(p)
+          val buf = new TrieArrayBuffer(1 << 16, schema)
+          execOp(p) {rec => buf += rec.fields}
+          buf.toTrieArray
+        }
+
     }
     def execQuery(q: Operator): Unit = execOp(q) { _ => }
 
@@ -176,6 +186,23 @@ object query_staged {
 
         j = 0
         next foreach {x => lenOfArray(j) = x; j += 1}
+
+        j = 0
+        for(x <- elemArray) {
+          i = 0
+          while (i < lenOfArray(j)) {
+            print(x(i) + " ")
+            i += 1
+          }
+          print("\n")
+          i = 0
+          while (i < lenOfArray(j)) {
+            print(indexArray(j)(i) + " ")
+            i += 1
+          }
+          print("\n")
+          j += 1
+        }
       }
     }
 
@@ -360,6 +387,7 @@ object query_staged {
           }
         }
         */
+        /*
         class LFTJoin (schemas: List[Schema]) {
           //Register firstly
           var modifiedSchemas: List[Schema] = null
@@ -368,5 +396,6 @@ object query_staged {
           def init: Unit = {}
           def run (yld: Record => Rep[Unit]): Rep[Unit] = {}
         }
+        */
       }
   }}

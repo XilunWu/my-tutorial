@@ -257,18 +257,13 @@ Examples:
     test:run unstaged "select * from ? schema Phrase, Year, MatchCount, VolumeCount delim \\t where Phrase='Auswanderung'" src/data/t1gram.csv
     test:run c        "select * from ? schema Phrase, Year, MatchCount, VolumeCount delim \\t where Phrase='Auswanderung'" src/data/t1gram.csv
 */
-
 trait Engine extends QueryProcessor with SQLParser {
   def query: String
   def filename: String
   def liftTable(n: String): Table
   def eval: Unit
   def prepare: Unit = {}
-  val scan_t1gram = Scan("?",Some(Schema("Phrase", "Year", "MatchCount", "VolumeCount")),Some('\t'))
-  val expectedAstForTest = List(LFTJoin(List(scan_t1gram)))
-  def run: Unit = expectedAstForTest.foreach{ast => 
-					     utils.time(execQuery(PrintCSV(ast)))}
-
+  def run: Unit = execQuery(PrintCSV(parseSql(query)))
   override def dynamicFilePath(table: String): Table =
     liftTable(if (table == "?") filename else filePath(table))
   def evalString = {
@@ -287,22 +282,58 @@ object Run {
   var qu: String = _
   var fn: String = _
 
-
   trait MainEngine extends Engine {
     override def query = qu
     override def filename =  fn
-}
+  }
 
-    def unstaged_engine: Engine = new Engine with MainEngine with query_unstaged.QueryInterpreter {
+  def unstaged_engine: Engine =
+    new Engine with MainEngine with query_unstaged.QueryInterpreter {
       override def liftTable(n: Table) = n
       override def eval = run
     }
+  def scala_engine =
+    new DslDriver[String,Unit] with ScannerExp
+    with StagedEngine with MainEngine with query_staged.QueryCompiler { q =>
+      override val codegen = new DslGen with ScalaGenScanner {
+        val IR: q.type = q
+      }
+      override def snippet(fn: Table): Rep[Unit] = run
+      override def prepare: Unit = precompile
+      override def eval: Unit = eval(filename)
+    }
+  def c_engine =
+    new DslDriverC[String,Unit] with ScannerLowerExp
+    with StagedEngine with MainEngine with query_optc.QueryCompiler { q =>
+      override val codegen = new DslGenC with CGenScannerLower {
+        val IR: q.type = q
+      }
+      override def snippet(fn: Table): Rep[Unit] = run
+      override def prepare: Unit = {}
+      override def eval: Unit = eval(filename)
+    }
 
   def main(args: Array[String]) {
+    if (args.length < 2) {
+      println("syntax:")
+      println("   test:run (unstaged|scala|c) sql [file]")
+      println()
+      println("example usage:")
+      println("   test:run c \"select * from ? schema Phrase, Year, MatchCount, VolumeCount delim \\t where Phrase='Auswanderung'\" src/data/t1gram.csv")
+      return
+    }
+    val version = args(0)
+    val engine = version match {
+      case "c" => c_engine
+      case "scala" => scala_engine
+      case "unstaged" => unstaged_engine
+      case _ => println("warning: unexpected engine, using 'unstaged' by default")
+        unstaged_engine
+    }
+    qu = args(1)
+    if (args.length > 2)
+      fn = args(2)
 
-    fn = "src/data/t1gram.csv"
-    val engine = staged_engine
-    
     try {
       engine.prepare
       utils.time(engine.eval)
@@ -311,7 +342,6 @@ object Run {
         println("ERROR: " + ex)
     }
   }
-
 }
 
 
