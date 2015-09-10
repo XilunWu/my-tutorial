@@ -17,25 +17,6 @@ object query_staged {
       with ScannerBase {
     override def version = "query_staged"
 
-    implicit def RepIntToInt(i: Rep[Int]): Int = i match {
-       case 0 => 0
-       case 1 => 1
-       case 2 => 2
-       case 3 => 3
-       case 4 => 4
-       case 5 => 5
-       case 6 => 6
-       case 7 => 7
-       case 8 => 8
-       case 9 => 9
-       case 10 => 10
-       case 11 => 11
-       case 12 => 12
-       case 13 => 13
-       case 14 => 14
-       case _ => 15
-     }
-
     /**
       Low-Level Processing Logic
       --------------------------
@@ -65,7 +46,12 @@ object query_staged {
 
     def printFields(fields: Fields) = printf(fields.map{_ => "%s"}.mkString("", defaultFieldDelimiter.toString, "\n"), fields: _*)
 
+    /*
+     Note: this two comparison func doesn't work for empty Fields object
+     */
     def fieldsEqual(a: Fields, b: Fields) = (a zip b).foldLeft(unit(true)) { (a,b) => a && b._1 == b._2 }
+
+    def fieldsLessThan(a: Fields, b: Fields) = (a zip b).foldLeft(unit(false)) { (a,b) => a || b._1 < b._2}
 
     def fieldsHash(a: Fields) = a.foldLeft(unit(0L)) { _ * 41L + _.HashCode }
 
@@ -137,6 +123,50 @@ object query_staged {
       Data Structure Implementations
       ------------------------------
       */
+
+    class TrieArrayBuffer (dataSize: Int, schema: Schema) {
+      val buf = schema.map(f => NewArray[String](dataSize))
+      var len = 0
+
+      def +=(x: Seq[Rep[String]]) = {
+        this(len) = x
+        len += 1
+      }
+      def update(i: Rep[Int], x: Seq[Rep[String]]) = {
+        (buf,x).zipped.foreach((b,x) => b(i) = x)
+      }
+      def apply(i: Rep[Int]) = {
+        buf.map(b => b(i))
+      }
+      def sort: Rep[Unit] = {}
+      def toTrieArray: Rep[Unit] = {
+        val elemArray = schema.map(f => NewArray[String](dataSize))
+        val indexArray = schema.map(f => NewArray[Int](dataSize))
+        val elem = NewArray[String](schema.length)
+        val next = NewArray[Int](schema.length)
+        //PrimitiveOps.scala:  implicit def intToRepInt(x: Int) = unit(x)  
+
+        var i = 0
+        var j: Int = 0
+        for (x <- this(i)) {
+          elem(j) = x
+          //how to get elem?
+          elemArray(j)(i) = x
+          //which boundary to put?
+          next(j) = next(j) + 1
+          j += 1
+        }
+        i += 1
+
+        while (i < len) {
+          j = 0
+          for (x <- this(i)) {
+
+          }
+        }
+
+      }
+    }
 
     // defaults for hash sizes etc
 
@@ -261,140 +291,71 @@ object query_staged {
       def apply(i: Rep[Int]) = {
         buf.map(b => b(i))
       }
-      //sort the whole buf with function fieldsLessThan
-      def sortWith(lt: (Rep[Array[T]], Rep[Array[T]]) => Rep[Boolean]): Rep[Unit] = {
-        val length = len: Rep[Int]
-        sortHelper(0, length, lt)
+    }
+      /**
+        Trie-Join
+        --------------------------
+        */
 
-        def sortHelper(start: Rep[Int], end: Rep[Int], lt: (Rep[Array[T]], Rep[Array[T]]) => Rep[Boolean]): Rep[Unit] = {
-          if (end - start < 10) bubbleSort(start, end, lt)
-          else {
-            val pivot = buf(start + (end - start) / 2)
-            val arr = new ArrayBuffer[String](end - start, schema)
-            var i = start
-            while (i < end) {arr.update(i - start, buf(i)); i += 1}
-            i = start
-            var j = end - 1
-            for (x <- arr.buf) {if (lt(x, pivot)) {this.update(i, x); i += 1} else {this.update(j, x); j -= 1}}
-            sortHelper(start, i, lt)
-            sortHelper(i + 1, end, lt)
+      /**
+        Use TrieArray to replace traditional Node Tree
+        */
+
+      object lftJoin{
+        /*
+        class TrieArray (schema: Schema) {
+          var value = schema.map(f => NewArray[String](dataSize))
+          val index = schema.map(f => NewArray[Int](dataSize))
+
+          //cursorPos(cursorLv) is the current position of cursor
+          var cursorLv: Rep[Int] = 0
+          val cursorPos = NewArray[Int](schema.length)
+          /**
+            Trie iterator interface
+            */
+          def key: Rep[String] = {
+            values(curr)(pos(curr))
+          }//force read
+          def next: Rep[Unit] = pos(curr) = pos(curr) + 1
+          def atEnd: Rep[Boolean] = {
+            if (pos(curr) == values(curr).length - 1) true
+            else if (curr != 0 && pos(curr) == indices(curr - 1)(pos(curr - 1) + 1)) true
+            else false
           }
-        }
-        def bubbleSort(start: Rep[Int], end: Rep[Int], lt: (Rep[Array[T]], Rep[Array[T]]) => Rep[Boolean]) = {
-          var i = end - 1
-          while (i > 0){
-            var j = 0
-            while (j < i){
-              if (lt(buf(j + 1), buf(j))) {
-                val tmp = Vector[Rep[T]](schema.sizes)
-                var k = 0
-                for(x <- buf(j)) {tmp(k) = x; k += 1}
-                this.update(j, buf(j + 1))
-                this.update(j + 1, tmp)
-              }
-              j += 1
+          def seek(seekKey: Rep[String]): Rep[Unit] = {
+            //put currPos onto correct position where key is the first key which >= seekKey
+            val parentIdxArray = indices(curr - 1)
+            val start = parentIdxArray(pos(curr - 1))
+            val end = parentIdxArray(pos(curr - 1) + 1)
+            binSearch(seekKey, start, end)
+            /**
+              Helper function
+              */
+            def binSearch(seekKey: Rep[String], start: Rep[Int], end: Rep[Int]): Rep[Unit] = start match {
+              case `end` => pos(curr) = start
+              case _ => val currValArray = values(curr); if (currValArray((start + end) / 2) <= seekKey) {val newStart = (start + end) / 2 + 1; binSearch(seekKey, newStart, end)} else {val newEnd = (start + end) / 2; binSearch(seekKey, start, newEnd)}
             }
-            i -= 1
+          }
+          def open: Rep[Unit] = {pos(curr + 1) = indices(curr)(pos(curr)); curr += 1}
+          def up: Rep[Unit] = curr -= 1
+
+          //ser curr, currPos, parentPos, etc. It does the same thing as the first call open()
+          def init: Rep[Unit] = {
+
+          }
+
+          def insert(f: Fields): Rep[Unit] = {
+
           }
         }
+        */
+        class LFTJoin (schemas: List[Schema]) {
+          //Register firstly
+          var modifiedSchemas: List[Schema] = null
+          init  //register schemas
+          //Get the info of schema as well as its order
+          def init: Unit = {}
+          def run (yld: Record => Rep[Unit]): Rep[Unit] = {}
+        }
       }
-    }
-
-
-     /**
-       Trie-Join
-       --------------------------
-       */
-
-     /**
-       Use TrieArray to replace traditional Node Tree
-       */
-
-     object lftJoin{
-
-       object trieArrayDefaults {
-         val dataSize   = 1 << 16
-       }
-
-       import trieArrayDefaults._
-
-       implicit def RepIntToInt(i: Rep[Int]): Int = i match {
-         case 0 => 0
-         case 1 => 1
-         case 2 => 2
-         case 3 => 3
-         case 4 => 4
-         case 5 => 5
-         case 6 => 6
-         case 7 => 7
-         case 8 => 8
-         case 9 => 9
-         case 10 => 10
-         case 11 => 11
-         case 12 => 12
-         case 13 => 13
-         case 14 => 14
-         case _ => 15
-       }
-
-       class TrieArrayBuffer (schema: Schema) {
-
-       }
-
-       class TrieArray (schema: Schema) {
-         //Vector[Rep[Array[String Or Int]]]
-        var values: Vector[Rep[Array[String]]] = null
-        val indices: Vector[Rep[Array[Int]]] = null
-        var curr: Rep[Int] = 0
-        val pos = NewArray[Int](schema.length)
-        /**
-          Trie iterator interface
-          */
-        def key: Rep[String] = {
-          values(curr)(pos(curr))
-        }//force read
-        def next: Rep[Unit] = pos(curr) = pos(curr) + 1
-        def atEnd: Rep[Boolean] = {
-          if (pos(curr) == values(curr).length - 1) true
-          else if (curr != 0 && pos(curr) == indices(curr - 1)(pos(curr - 1) + 1)) true
-          else false
-        }
-        def seek(seekKey: Rep[String]): Rep[Unit] = {
-          //put currPos onto correct position where key is the first key which >= seekKey
-          val parentIdxArray = indices(curr - 1)
-          val start = parentIdxArray(pos(curr - 1))
-          val end = parentIdxArray(pos(curr - 1) + 1)
-          binSearch(seekKey, start, end)
-        /**
-          Helper function
-          */
-          def binSearch(seekKey: Rep[String], start: Rep[Int], end: Rep[Int]): Rep[Unit] = start match {
-            case `end` => pos(curr) = start
-            case _ => val currValArray = values(curr); if (currValArray((start + end) / 2) <= seekKey) {val newStart = (start + end) / 2 + 1; binSearch(seekKey, newStart, end)} else {val newEnd = (start + end) / 2; binSearch(seekKey, start, newEnd)}
-          }
-        }
-        def open: Rep[Unit] = {pos(curr + 1) = indices(curr)(pos(curr)); curr += 1}
-        def up: Rep[Unit] = curr -= 1
-
-        //ser curr, currPos, parentPos, etc. It does the same thing as the first call open()
-        def init: Rep[Unit] = {
-
-        }
-
-        def insert(f: Fields): Rep[Unit] = {
-
-        }
-        //        def build: Rep[Unit] = {}
-      }
-      class LFTJoin (schemas: List[Schema]) {
-        //Register firstly
-        var modifiedSchemas: List[Schema] = null
-        init  //register schemas
-        val relations = modifiedSchemas.map(s => new TrieArray(s))
-
-        //Get the info of schema as well as its order
-        def init: Unit = {}
-        def run (yld: Record => Rep[Unit]): Rep[Unit] = {}
-      }
-    }
-}}
+  }}
