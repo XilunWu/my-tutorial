@@ -151,18 +151,26 @@ object query_staged {
         for (x <- this(i)) {
           elem(j) = x
           //how to get elem?
-          elemArray(j)(i) = x
+          elemArray(j)(next(j)) = x
           //which boundary to put?
+          //Boundary is the location of its first child
+          //For the last attribute, there's no index array
+          if (j < schema.length - 1) indexArray(j)(next(j)) = next(j + 1)
           next(j) = next(j) + 1
           j += 1
         }
         i += 1
 
+        var isNew = false
         while (i < len) {
           j = 0
+          isNew = false
           for (x <- this(i)) {
-
+            if (elem(j) != x) {isNew = true; elem(j) = x}
+            if (isNew) {elemArray(j)(next(j)) = x; if (j < schema.length - 1) indexArray(j)(next(j)) = next(j + 1); next(j) = next(j) + 1}
+            j += 1
           }
+          i += 1
         }
 
       }
