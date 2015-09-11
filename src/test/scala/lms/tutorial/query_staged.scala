@@ -119,11 +119,14 @@ object query_staged {
         printSchema(schema)
         execOp(parent) { rec => printFields(rec.fields) }
       case LFTJoin(parents) => 
+        println("LFTJoin starts!")
+        println("Number of relations: " + parents.length)
         parents foreach { p =>
           val schema = resultSchema(p)
           val buf = new TrieArrayBuffer(1 << 16, schema)
           execOp(p) {rec => buf += rec.fields}
           buf.toTrieArray
+          println("Succeed: toTrieArray!")
         }
 
     }
@@ -137,6 +140,7 @@ object query_staged {
     class TrieArrayBuffer (dataSize: Int, schema: Schema) {
       val buf = schema.map(f => NewArray[String](dataSize))
       var len = 0
+      println("This is a TrieArrayBuffer of size: " + dataSize)
 
       def +=(x: Seq[Rep[String]]) = {
         this(len) = x
@@ -156,7 +160,7 @@ object query_staged {
         val next = NewArray[Int](schema.length)
         val lenOfArray = NewArray[Int](schema.length)
         //PrimitiveOps.scala:  implicit def intToRepInt(x: Int) = unit(x)  
-
+        println("Start toTrieArray. dataSize: " + dataSize)
         var i = 0
         var j: Int = 0
         for (x <- this(i)) {
@@ -183,26 +187,28 @@ object query_staged {
           }
           i += 1
         }
-
+/*
         j = 0
-        next foreach {x => lenOfArray(j) = x; j += 1}
+        while (j < schema.length) {
+          lenOfArray(j) = next(j) 
+          print("j = " + j + " lenOfArray = " + lenOfArray(j) + " ")
+          j += 1
+        }; print('\n')
 
         j = 0
         for(x <- elemArray) {
-          i = 0
-          while (i < lenOfArray(j)) {
+          println("j = " + j + " lenOfArray = " + lenOfArray(j))
+          for(i <- 0 until lenOfArray(j)) {
             print(x(i) + " ")
-            i += 1
           }
           print("\n")
-          i = 0
-          while (i < lenOfArray(j)) {
+          for(i <- 0 until lenOfArray(j)) {
             print(indexArray(j)(i) + " ")
-            i += 1
           }
           print("\n")
           j += 1
         }
+        */
       }
     }
 

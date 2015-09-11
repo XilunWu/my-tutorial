@@ -263,7 +263,12 @@ trait Engine extends QueryProcessor with SQLParser {
   def liftTable(n: String): Table
   def eval: Unit
   def prepare: Unit = {}
-  def run: Unit = execQuery(PrintCSV(parseSql(query)))
+  //Modify run func to execute designated AST
+  //def run: Unit = execQuery(PrintCSV(parseSql(query)))
+  val scan_t1gram = Scan("?",Some(Schema("Phrase", "Year", "MatchCount", "VolumeCount")),Some('\t'))
+  def run: Unit = execQuery(PrintCSV(LFTJoin(List(scan_t1gram))))
+  //def run: Unit = execQuery(PrintCSV(scan_t1gram))
+
   override def dynamicFilePath(table: String): Table =
     liftTable(if (table == "?") filename else filePath(table))
   def evalString = {
@@ -314,6 +319,7 @@ object Run {
     }
 
   def main(args: Array[String]) {
+    /*
     if (args.length < 2) {
       println("syntax:")
       println("   test:run (unstaged|scala|c) sql [file]")
@@ -333,7 +339,32 @@ object Run {
     qu = args(1)
     if (args.length > 2)
       fn = args(2)
+      */
 
+    if (args.length < 1) {
+      println("syntax:")
+      println("   test:run (unstaged|scala|c) sql [file]")
+      println()
+      println("example usage:")
+      println("   test:run c \"select * from ? schema Phrase, Year, MatchCount, VolumeCount delim \\t where Phrase='Auswanderung'\" src/data/t1gram.csv")
+      return
+    }
+    val version = args(0)
+    //Why fn must be put before engine? Because of dynamic FilePath???
+    fn = "src/data/t1gram.csv"
+
+    val engine = version match {
+      case "c" => c_engine
+      case "scala" => scala_engine
+      case "unstaged" => unstaged_engine
+      case _ => println("warning: unexpected engine, using 'unstaged' by default")
+        unstaged_engine
+    }
+    /*
+    qu = args(1)
+    if (args.length > 2)
+      fn = args(2)
+      */
     try {
       engine.prepare
       utils.time(engine.eval)
