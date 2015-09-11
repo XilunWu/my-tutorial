@@ -187,6 +187,22 @@ object query_staged {
           }
           i += 1
         }
+        /*  test  */
+        var k = 0
+        while (k < next.length) {
+          lenOfArray(k) = next(k) 
+          print("k = " + k + " lenOfArray = " + lenOfArray(k) + " ")
+          k += 1
+        }; print('\n')
+
+        j = 0
+        while (j < next.length && j < 5) {
+          lenOfArray(j) = next(j) 
+          print("j = " + j + " lenOfArray = " + lenOfArray(j) + " ")
+          j += 1
+          print('\n')
+        }; print('\n')
+
 /*
         j = 0
         while (j < schema.length) {
