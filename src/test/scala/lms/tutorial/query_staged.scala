@@ -153,7 +153,7 @@ object query_staged {
         buf.map(b => b(i))
       }
       def sort: Rep[Unit] = {}
-      def toTrieArray: Rep[Unit] = {
+      def toTrieArray: TrieArray = {
         val elemArray = schema.map(f => NewArray[String](dataSize))
         val indexArray = schema.map(f => NewArray[Int](dataSize))
         val elem = NewArray[String](schema.length)
@@ -187,22 +187,6 @@ object query_staged {
           }
           i += 1
         }
-        /*  test  */
-        var k = 0
-        while (k < next.length) {
-          lenOfArray(k) = next(k) 
-          print("k = " + k + " lenOfArray = " + lenOfArray(k) + " ")
-          k += 1
-        }; print('\n')
-
-        j = 0
-        while (j < next.length && j < 5) {
-          lenOfArray(j) = next(j) 
-          print("j = " + j + " lenOfArray = " + lenOfArray(j) + " ")
-          j += 1
-          print('\n')
-        }; print('\n')
-
 /*
         j = 0
         while (j < schema.length) {
@@ -225,6 +209,64 @@ object query_staged {
           j += 1
         }
         */
+        new TrieArray(schema, elemArray, indexArray, lenOfArray)
+      }
+
+      class TrieArray(schema: Schema, value: Vector[Rep[Array[String]]], index: Vector[Rep[Array[Int]]], len: Rep[Array[Int]]) {
+        var currLv = 0  //  current level in TrieArray
+        val currPos = NewArray[Int](schema.length)  //  current pos of cursor in each level
+        for (i <- 0 until currPos.length) {currPos(i) = 0; println(currPos(i))}
+
+        //method to access element in Vector using Rep[Int] as subscript
+        def access[T:Manifest](i: Rep[Int])(f: Int => Rep[T]): Rep[T] = {
+          if (i == 0) f(0)
+          else if (i == 1) f(1)
+          else if (i == 2) f(2)
+          else if (i == 3) f(3)
+          else if (i == 4) f(4)
+          else if (i == 5) f(5)
+          else if (i == 6) f(6)
+          else if (i == 7) f(7)
+          else if (i == 8) f(8)
+          else if (i == 9) f(9)
+          else if (i == 10) f(10)
+          else if (i == 11) f(11)
+          else if (i == 12) f(12)
+          else if (i == 13) f(13)
+          else if (i == 14) f(14)
+          else f(15)
+        }
+        /**
+          Trie iterator interface
+        */
+        def key: Rep[String] = {
+          access[String](currLv) { i => value(i)(currPos(currLv))}
+        }
+        def next: Rep[Unit] = currPos(currLv) = currPos(currLv) + 1
+        def atEnd: Rep[Boolean] = {
+          if (currPos(currLv) == len(currLv)) true
+          else if (currLv != 0 && currPos(currLv) == access[Int](currLv) {i => index(i)(currPos(currLv))}) true
+          else false
+        }
+        def seek(seekKey: Rep[String]): Rep[Unit] = {
+          //put currPos onto correct position where key is the first key which >= seekKey
+          val start = access[Int](currLv) {i => index(i)(currPos(currLv - 1))}
+          val end = access[Int](currLv) {i => index(i + 1)(currPos(currLv - 1))}
+          binSearch(seekKey, start, end)
+          /**
+            Helper function
+            */
+          def binSearch(seekKey: Rep[String], start: Rep[Int], end: Rep[Int]): Rep[Unit] = {
+            if (start == end) currPos(currLv) = start
+            else {
+              val pivot = access(currLv){i => value(i)((start + end) / 2)}
+              if (pivot <= seekKey) binSearch(seekKey, (start + end) / 2 + 1, end)
+              else binSearch(seekKey, start, (start + end) / 2)
+            }
+          }
+        }
+        def open: Rep[Unit] = {currPos(currLv + 1) = access(currLv){i => index(i)(currPos(currLv))}; currLv += 1}
+        def up: Rep[Unit] = currLv -= 1
       }
     }
 
@@ -362,53 +404,7 @@ object query_staged {
         */
 
       object lftJoin{
-        /*
-        class TrieArray (schema: Schema) {
-          var value = schema.map(f => NewArray[String](dataSize))
-          val index = schema.map(f => NewArray[Int](dataSize))
-
-          //cursorPos(cursorLv) is the current position of cursor
-          var cursorLv: Rep[Int] = 0
-          val cursorPos = NewArray[Int](schema.length)
-          /**
-            Trie iterator interface
-            */
-          def key: Rep[String] = {
-            values(curr)(pos(curr))
-          }//force read
-          def next: Rep[Unit] = pos(curr) = pos(curr) + 1
-          def atEnd: Rep[Boolean] = {
-            if (pos(curr) == values(curr).length - 1) true
-            else if (curr != 0 && pos(curr) == indices(curr - 1)(pos(curr - 1) + 1)) true
-            else false
-          }
-          def seek(seekKey: Rep[String]): Rep[Unit] = {
-            //put currPos onto correct position where key is the first key which >= seekKey
-            val parentIdxArray = indices(curr - 1)
-            val start = parentIdxArray(pos(curr - 1))
-            val end = parentIdxArray(pos(curr - 1) + 1)
-            binSearch(seekKey, start, end)
-            /**
-              Helper function
-              */
-            def binSearch(seekKey: Rep[String], start: Rep[Int], end: Rep[Int]): Rep[Unit] = start match {
-              case `end` => pos(curr) = start
-              case _ => val currValArray = values(curr); if (currValArray((start + end) / 2) <= seekKey) {val newStart = (start + end) / 2 + 1; binSearch(seekKey, newStart, end)} else {val newEnd = (start + end) / 2; binSearch(seekKey, start, newEnd)}
-            }
-          }
-          def open: Rep[Unit] = {pos(curr + 1) = indices(curr)(pos(curr)); curr += 1}
-          def up: Rep[Unit] = curr -= 1
-
-          //ser curr, currPos, parentPos, etc. It does the same thing as the first call open()
-          def init: Rep[Unit] = {
-
-          }
-
-          def insert(f: Fields): Rep[Unit] = {
-
-          }
-        }
-        */
+        
         /*
         class LFTJoin (schemas: List[Schema]) {
           //Register firstly
