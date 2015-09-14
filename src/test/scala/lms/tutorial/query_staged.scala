@@ -121,11 +121,13 @@ object query_staged {
       case LFTJoin(parents) => 
         println("LFTJoin starts!")
         println("Number of relations: " + parents.length)
+        import scala.collection.mutable.ArrayBuffer
+        val relations = ArrayBuffer[TrieArray]()
         parents foreach { p =>
           val schema = resultSchema(p)
           val buf = new TrieArrayBuffer(1 << 16, schema)
           execOp(p) {rec => buf += rec.fields}
-          buf.toTrieArray
+          relations += buf.toTrieArray
           println("Succeed: toTrieArray!")
         }
 
@@ -187,7 +189,7 @@ object query_staged {
           }
           i += 1
         }
-/*
+        /*
         j = 0
         while (j < schema.length) {
           lenOfArray(j) = next(j) 
@@ -211,64 +213,65 @@ object query_staged {
         */
         new TrieArray(schema, elemArray, indexArray, lenOfArray)
       }
+    }
 
-      class TrieArray(schema: Schema, value: Vector[Rep[Array[String]]], index: Vector[Rep[Array[Int]]], len: Rep[Array[Int]]) {
-        var currLv = 0  //  current level in TrieArray
-        val currPos = NewArray[Int](schema.length)  //  current pos of cursor in each level
-        for (i <- 0 until currPos.length) {currPos(i) = 0; println(currPos(i))}
+    class TrieArray(schema: Schema, value: Vector[Rep[Array[String]]], index: Vector[Rep[Array[Int]]], len: Rep[Array[Int]]) {
+      var currLv = 0  //  current level in TrieArray
+      val currPos = NewArray[Int](schema.length)  //  current pos of cursor in each level
+      for (i <- 0 until currPos.length) {currPos(i) = 0; println(currPos(i))}
 
-        //method to access element in Vector using Rep[Int] as subscript
-        def access[T:Manifest](i: Rep[Int])(f: Int => Rep[T]): Rep[T] = {
-          if (i == 0) f(0)
-          else if (i == 1) f(1)
-          else if (i == 2) f(2)
-          else if (i == 3) f(3)
-          else if (i == 4) f(4)
-          else if (i == 5) f(5)
-          else if (i == 6) f(6)
-          else if (i == 7) f(7)
-          else if (i == 8) f(8)
-          else if (i == 9) f(9)
-          else if (i == 10) f(10)
-          else if (i == 11) f(11)
-          else if (i == 12) f(12)
-          else if (i == 13) f(13)
-          else if (i == 14) f(14)
-          else f(15)
-        }
+      //method to access element in Vector using Rep[Int] as subscript
+      def access[T:Manifest](i: Rep[Int])(f: Int => Rep[T]): Rep[T] = {
+        if (i == 0) f(0)
+        else if (i == 1) f(1)
+        else if (i == 2) f(2)
+        else if (i == 3) f(3)
+        else if (i == 4) f(4)
+        else if (i == 5) f(5)
+        else if (i == 6) f(6)
+        else if (i == 7) f(7)
+        else if (i == 8) f(8)
+        else if (i == 9) f(9)
+        else if (i == 10) f(10)
+        else if (i == 11) f(11)
+        else if (i == 12) f(12)
+        else if (i == 13) f(13)
+        else if (i == 14) f(14)
+        else f(15)
+      }
+      /**
+        Trie iterator interface
+      */
+      def key: Rep[String] = {
+        access[String](currLv) { i => value(i)(currPos(currLv))}
+      }
+      def next: Rep[Unit] = currPos(currLv) = currPos(currLv) + 1
+      def atEnd: Rep[Boolean] = {
+        if (currPos(currLv) == len(currLv)) true
+        else if (currLv != 0 && currPos(currLv) == access[Int](currLv) {i => index(i)(currPos(currLv))}) true
+        else false
+      }
+      def seek(seekKey: Rep[String]): Rep[Unit] = {
+        //put currPos onto correct position where key is the first key which >= seekKey
+        val start = access[Int](currLv) {i => index(i)(currPos(currLv - 1))}
+        val end = access[Int](currLv) {i => index(i + 1)(currPos(currLv - 1))}
+        binSearch(seekKey, start, end)
         /**
-          Trie iterator interface
-        */
-        def key: Rep[String] = {
-          access[String](currLv) { i => value(i)(currPos(currLv))}
-        }
-        def next: Rep[Unit] = currPos(currLv) = currPos(currLv) + 1
-        def atEnd: Rep[Boolean] = {
-          if (currPos(currLv) == len(currLv)) true
-          else if (currLv != 0 && currPos(currLv) == access[Int](currLv) {i => index(i)(currPos(currLv))}) true
-          else false
-        }
-        def seek(seekKey: Rep[String]): Rep[Unit] = {
-          //put currPos onto correct position where key is the first key which >= seekKey
-          val start = access[Int](currLv) {i => index(i)(currPos(currLv - 1))}
-          val end = access[Int](currLv) {i => index(i + 1)(currPos(currLv - 1))}
-          binSearch(seekKey, start, end)
-          /**
-            Helper function
-            */
-          def binSearch(seekKey: Rep[String], start: Rep[Int], end: Rep[Int]): Rep[Unit] = {
-            if (start == end) currPos(currLv) = start
-            else {
-              val pivot = access(currLv){i => value(i)((start + end) / 2)}
-              if (pivot <= seekKey) binSearch(seekKey, (start + end) / 2 + 1, end)
-              else binSearch(seekKey, start, (start + end) / 2)
-            }
+          Helper function
+          */
+        def binSearch(seekKey: Rep[String], start: Rep[Int], end: Rep[Int]): Rep[Unit] = {
+          if (start == end) currPos(currLv) = start
+          else {
+            val pivot = access(currLv){i => value(i)((start + end) / 2)}
+            if (pivot <= seekKey) binSearch(seekKey, (start + end) / 2 + 1, end)
+            else binSearch(seekKey, start, (start + end) / 2)
           }
         }
-        def open: Rep[Unit] = {currPos(currLv + 1) = access(currLv){i => index(i)(currPos(currLv))}; currLv += 1}
-        def up: Rep[Unit] = currLv -= 1
       }
+      def open: Rep[Unit] = {currPos(currLv + 1) = access(currLv){i => index(i)(currPos(currLv))}; currLv += 1}
+      def up: Rep[Unit] = currLv -= 1
     }
+    
 
     // defaults for hash sizes etc
 
@@ -394,26 +397,32 @@ object query_staged {
         buf.map(b => b(i))
       }
     }
-      /**
-        Trie-Join
-        --------------------------
-        */
+    /**
+      Trie-Join
+      --------------------------
+      */
 
-      /**
-        Use TrieArray to replace traditional Node Tree
-        */
+    /**
+      Use TrieArray to replace traditional Node Tree
+      */
 
-      object lftJoin{
-        
-        /*
-        class LFTJoin (schemas: List[Schema]) {
-          //Register firstly
-          var modifiedSchemas: List[Schema] = null
-          init  //register schemas
-          //Get the info of schema as well as its order
-          def init: Unit = {}
-          def run (yld: Record => Rep[Unit]): Rep[Unit] = {}
-        }
-        */
-      }
+  
+    object TrieJoinAlgo {
+      import scala.collection.mutable.ArrayBuffer
+      //assign them every time we call "load" method
+      var schema: ArrayBuffer[Schema] = null
+      var iter: ArrayBuffer[TrieArray] = null
+      var leapfrog: ArrayBuffer[Leapfrog] = null
+      var depth = 0
+
+
+      //Register firstly
+
+      init  //register schemas
+      //Get the info of schema as well as its order
+      def init: Unit = {}
+      def run (yld: Record => Rep[Unit]): Rep[Unit] = {}
+    }
+
+    }
   }}
