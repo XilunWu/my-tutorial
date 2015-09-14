@@ -77,7 +77,17 @@ object query_staged {
       case HashJoin(left, right)   => resultSchema(left) ++ resultSchema(right)
       case PrintCSV(parent)        => Schema()
       //Only for test
-      case LFTJoin(parents)        => resultSchema(parents(0))
+      case LFTJoin(parents)        => val schema = scala.collection.mutable.ArrayBuffer[String]()
+                                      val hs = scala.collection.mutable.HashSet[String]()
+                                      parents foreach {
+                                        resultSchema(_) foreach { vname =>
+                                          if (!hs.contains(vname)) {
+                                            hs += vname
+                                            schema += vname
+                                          }
+                                        }
+                                      }
+                                      schema.toVector
     }
 
     def execOp(o: Operator)(yld: Record => Rep[Unit]): Rep[Unit] = o match {
