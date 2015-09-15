@@ -132,12 +132,16 @@ object query_staged {
         println("LFTJoin starts!")
         println("Number of relations: " + parents.length)
         import scala.collection.mutable.ArrayBuffer
+        val schemaOfResult = resultSchema(parents)
+        val leapfrog = schemaOfResult.map(r => new Leapfrog)
         val relations = ArrayBuffer[TrieArray]()
         parents foreach { p =>
           val schema = resultSchema(p)
+          //Let's assume schema keeps in order
           val buf = new TrieArrayBuffer(1 << 16, schema)
           execOp(p) {rec => buf += rec.fields}
           relations += buf.toTrieArray
+          schema foreach {x => leapfrog(x indexOf resultSchema).register(relations.last)}
           println("Succeed: toTrieArray!")
         }
 
@@ -416,7 +420,12 @@ object query_staged {
       Use TrieArray to replace traditional Node Tree
       */
 
-  
+    class Leapfrog {
+      val iter = ArrayBuffer[TrieArray]()
+
+      def register(it: TrieArray) = iter += it
+    }
+
     object TrieJoinAlgo {
       import scala.collection.mutable.ArrayBuffer
       //assign them every time we call "load" method
