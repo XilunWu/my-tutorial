@@ -78,16 +78,16 @@ object query_staged {
       case PrintCSV(parent)        => Schema()
       //Only for test
       case LFTJoin(parents)        => val schema = scala.collection.mutable.ArrayBuffer[String]()
-                                      val hs = scala.collection.mutable.HashSet[String]()
-                                      parents foreach {
-                                        resultSchema(_) foreach { vname =>
-                                          if (!hs.contains(vname)) {
-                                            hs += vname
-                                            schema += vname
-                                          }
-                                        }
-                                      }
-                                      schema.toVector
+        val hs = scala.collection.mutable.HashSet[String]()
+        parents foreach {
+          resultSchema(_) foreach { vname =>
+            if (!hs.contains(vname)) {
+              hs += vname
+              schema += vname
+            }
+          }
+        }
+        schema.toVector
     }
 
     def execOp(o: Operator)(yld: Record => Rep[Unit]): Rep[Unit] = o match {
@@ -128,11 +128,11 @@ object query_staged {
         val schema = resultSchema(parent)
         printSchema(schema)
         execOp(parent) { rec => printFields(rec.fields) }
-      case LFTJoin(parents) => 
+      case LFTJoin(parents) =>
         println("LFTJoin starts!")
         println("Number of relations: " + parents.length)
         import scala.collection.mutable.ArrayBuffer
-        val schemaOfResult = resultSchema(parents)
+        val schemaOfResult = resultSchema(o)
         val leapfrog = schemaOfResult.map(r => new Leapfrog)
         val relations = ArrayBuffer[TrieArray]()
         parents foreach { p =>
@@ -141,9 +141,11 @@ object query_staged {
           val buf = new TrieArrayBuffer(1 << 16, schema)
           execOp(p) {rec => buf += rec.fields}
           relations += buf.toTrieArray
-          schema foreach {x => leapfrog(x indexOf resultSchema).register(relations.last)}
+          schema foreach {x => leapfrog(x indexOf schemaOfResult).register(relations.last)}
           println("Succeed: toTrieArray!")
         }
+        TrieJoinAlgo.load(schemaOfResult, leapfrog)
+
 
     }
     def execQuery(q: Operator): Unit = execOp(q) { _ => }
@@ -175,7 +177,7 @@ object query_staged {
         val elem = NewArray[String](schema.length)
         val next = NewArray[Int](schema.length)
         val lenOfArray = NewArray[Int](schema.length)
-        //PrimitiveOps.scala:  implicit def intToRepInt(x: Int) = unit(x)  
+        //PrimitiveOps.scala:  implicit def intToRepInt(x: Int) = unit(x)
         println("Start toTrieArray. dataSize: " + dataSize)
         var i = 0
         var j: Int = 0
@@ -204,27 +206,27 @@ object query_staged {
           i += 1
         }
         /*
-        j = 0
-        while (j < schema.length) {
-          lenOfArray(j) = next(j) 
-          print("j = " + j + " lenOfArray = " + lenOfArray(j) + " ")
-          j += 1
-        }; print('\n')
+         j = 0
+         while (j < schema.length) {
+         lenOfArray(j) = next(j) 
+         print("j = " + j + " lenOfArray = " + lenOfArray(j) + " ")
+         j += 1
+         }; print('\n')
 
-        j = 0
-        for(x <- elemArray) {
-          println("j = " + j + " lenOfArray = " + lenOfArray(j))
-          for(i <- 0 until lenOfArray(j)) {
-            print(x(i) + " ")
-          }
-          print("\n")
-          for(i <- 0 until lenOfArray(j)) {
-            print(indexArray(j)(i) + " ")
-          }
-          print("\n")
-          j += 1
-        }
-        */
+         j = 0
+         for(x <- elemArray) {
+         println("j = " + j + " lenOfArray = " + lenOfArray(j))
+         for(i <- 0 until lenOfArray(j)) {
+         print(x(i) + " ")
+         }
+         print("\n")
+         for(i <- 0 until lenOfArray(j)) {
+         print(indexArray(j)(i) + " ")
+         }
+         print("\n")
+         j += 1
+         }
+         */
         new TrieArray(schema, elemArray, indexArray, lenOfArray)
       }
     }
@@ -255,7 +257,7 @@ object query_staged {
       }
       /**
         Trie iterator interface
-      */
+        */
       def key: Rep[String] = {
         access[String](currLv) { i => value(i)(currPos(currLv))}
       }
@@ -421,27 +423,120 @@ object query_staged {
       */
 
     class Leapfrog {
-      val iter = ArrayBuffer[TrieArray]()
+      import scala.collection.mutable.ArrayBuffer
+      val iterBuf = ArrayBuffer[TrieArray]()
+      var iter: Array[TrieArray] = null
+      var atEnd = false
+      var p = 0
 
-      def register(it: TrieArray) = iter += it
+      def init: Rep[String] = {
+        iter = iterBuf.toArray
+        if (iter.exists(x => x.atEnd)) {
+          atEnd = true
+          null
+        } else {
+          atEnd = false
+          iter = iter.sortWith((x, y) => x.key < y.key)
+          p = 0
+          search
+        }
+      }
+      def seek(seekKey: String): String = {
+        iter(p).seek(seekKey)
+        if (iter(p).atEnd) {
+          atEnd = true
+          null
+        }
+        else {
+          p = (p + 1) % iter.length
+          search
+        }
+      }
+
+      def search: String = {
+        var max = iter((p + iter.length - 1) % iter.length).key
+        var min = iter(p).key
+        var key: String = null
+        while(max != min && !iter(p).atEnd){
+          min = iter(p).key
+          iter(p).seek(max)
+          if (!iter(p).atEnd) {max = iter(p).key; p = (p + 1) % iter.length} else atEnd = true
+        }
+        if (max == min) key = max
+        key
+      }
+
+      def open = iter foreach {i => i.open}
+      def up = iter foreach {i => i.up}
+      def key = iter(0).key
+      def register(it: TrieArray) = iterBuf += it
     }
 
     object TrieJoinAlgo {
-      import scala.collection.mutable.ArrayBuffer
       //assign them every time we call "load" method
-      var schema: ArrayBuffer[Schema] = null
-      var iter: ArrayBuffer[TrieArray] = null
-      var leapfrog: ArrayBuffer[Leapfrog] = null
-      var depth = 0
+      var schema: Schema = null
+      var leapfrog: Vector[Leapfrog] = null
+      var depth = -1
 
 
       //Register firstly
+      def load(s: Schema, lf: Vector[Leapfrog]): Rep[Unit] = {
+        schema = s
+        leapfrog = lf
+      }
 
-      init  //register schemas
-      //Get the info of schema as well as its order
-      def init: Unit = {}
-      def run (yld: Record => Rep[Unit]): Rep[Unit] = {}
-    }
+      def init: Rep[Unit] = {}
+      def run (yld: Record => Rep[Unit]): Rep[Unit] = {
+        var lf = leapfrog(0)
+        val res = NewArray[String](leapfrog.length)
+        var cur = 0
+        var needToInit = true
+        depth = 0
+        while (depth != -1) {
+          lf = access[Leapfrog](depth) {i => leapfrog(i)}
+          if (needToInit) {
+            lf.init
+            needToInit = false
+          }
+          if (lf.atEnd) {
+            lf.up
+            depth -= 1
+            if (depth != -1) {(access[Leapfrog](depth) {i => leapfrog(i)}).next; cur -= 1}
+          }
+          else if (depth != leapfrog.length - 1) {
+            res(cur) = lf.key
+            cur += 1
+            depth += 1
+            (access[Leapfrog](depth) {i => leapfrog(i)}).open
+            needToInit = true
+          }
+          else {
+            res(cur) = lf.key
+            val r = {var i = -1; schema.map{f => {i += 1; res(i)}}}
+            yld(Record(r, schema))
+            lf.next
+          }
+        }
+      }
 
+      def access[T:Manifest](i: Rep[Int])(f: Int => T): T = {
+        if (i == 0) f(0)
+        else if (i == 1) f(1)
+        else if (i == 2) f(2)
+        else if (i == 3) f(3)
+        else if (i == 4) f(4)
+        else if (i == 5) f(5)
+        else if (i == 6) f(6)
+        else if (i == 7) f(7)
+        else if (i == 8) f(8)
+        else if (i == 9) f(9)
+        else if (i == 10) f(10)
+        else if (i == 11) f(11)
+        else if (i == 12) f(12)
+        else if (i == 13) f(13)
+        else if (i == 14) f(14)
+        else f(15)
+      }
     }
-  }}
+  }
+}
