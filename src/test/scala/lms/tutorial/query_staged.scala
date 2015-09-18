@@ -132,14 +132,14 @@ object query_staged {
         println("LFTJoin starts!")
         println("Number of relations: " + parents.length)
         val schemaOfResult = resultSchema(o)
-        val buf = parents.map(p => new TrieArrayBuffer(1 << 16, schema, schemaOfResult))
+        val buf = parents.map(p => new TrieArrayBuffer(1 << 16, resultSchema(p), schemaOfResult))
         (parents, buf).zipped foreach {(p, b) =>
           val schema = resultSchema(p)
           //Let's assume schema keeps in order
           execOp(p) {rec => b += rec.fields}
         }
         val array = buf.toVector.map(b => b.toTrieArray)
-
+        lftjoin.load(array, schemaOfResult)
 
 
     }
@@ -151,7 +151,7 @@ object query_staged {
       */
 
     class TrieArrayBuffer (dataSize: Int, schema: Schema, schemaOfResult: Schema) {
-      val buf = schemaOfResult.map(f => NewArray[String](dataSize))
+      val buf = schema.map(f => NewArray[String](dataSize))
       var len = 0
       println("This is a TrieArrayBuffer of size: " + dataSize)
 
@@ -222,11 +222,12 @@ object query_staged {
          j += 1
          }
          */
-        new TrieArray(schema, elemArray, indexArray, lenOfArray)
+        new TrieArray(schema, schemaOfResult, elemArray, indexArray, lenOfArray)
       }
     }
 
-    class TrieArray(schema: Schema, value: Vector[Rep[Array[String]]], index: Vector[Rep[Array[Int]]], len: Rep[Array[Int]]) {
+    class TrieArray(schema: Schema, schemaOfResult: Schema, value: Vector[Rep[Array[String]]], index: Vector[Rep[Array[Int]]], len: Rep[Array[Int]]) {
+      val col = schema.map (s => s indexOf schemaOfResult)
       var currLv = 0  //  current level in TrieArray
       val currPos = NewArray[Int](schema.length)  //  current pos of cursor in each level
       for (i <- 0 until currPos.length) {currPos(i) = 0; println(currPos(i))}
@@ -250,6 +251,7 @@ object query_staged {
         else if (i == 14) f(14)
         else f(15)
       }
+      def hasCol(i: Rep[Int]): Rep[Boolean] = col.exists(x => x == i)
       /**
         Trie iterator interface
         */
@@ -273,13 +275,13 @@ object query_staged {
         def binSearch(seekKey: Rep[String], start: Rep[Int], end: Rep[Int]): Rep[Unit] = {
           if (start == end) currPos(currLv) = start
           else {
-            val pivot = access(currLv){i => value(i)((start + end) / 2)}
+            val pivot = access[String](currLv){i => value(i)((start + end) / 2)}
             if (pivot <= seekKey) binSearch(seekKey, (start + end) / 2 + 1, end)
             else binSearch(seekKey, start, (start + end) / 2)
           }
         }
       }
-      def open: Rep[Unit] = {currPos(currLv + 1) = access(currLv){i => index(i)(currPos(currLv))}; currLv += 1}
+      def open: Rep[Unit] = {currPos(currLv + 1) = access[Int](currLv){i => index(i)(currPos(currLv))}; currLv += 1}
       def up: Rep[Unit] = currLv -= 1
     }
     
@@ -413,104 +415,8 @@ object query_staged {
       --------------------------
       */
 
-    /**
-      Use TrieArray to replace traditional Node Tree
-      */
 
-    class Leapfrog {
-      var iter: Vector[TrieArray] = null
-      var atEnd = false
-      var p = 0
-
-      def init: Rep[String] = {
-        iter = iterBuf.toArray
-        if (iter.exists(x => x.atEnd)) {
-          atEnd = true
-          null
-        } else {
-          atEnd = false
-          iter = iter.sortWith((x, y) => x.key < y.key)
-          p = 0
-          search
-        }
-      }
-      def seek(seekKey: String): String = {
-        iter(p).seek(seekKey)
-        if (iter(p).atEnd) {
-          atEnd = true
-          null
-        }
-        else {
-          p = (p + 1) % iter.length
-          search
-        }
-      }
-
-      def search: String = {
-        var max = iter((p + iter.length - 1) % iter.length).key
-        var min = iter(p).key
-        var key: String = null
-        while(max != min && !iter(p).atEnd){
-          min = iter(p).key
-          iter(p).seek(max)
-          if (!iter(p).atEnd) {max = iter(p).key; p = (p + 1) % iter.length} else atEnd = true
-        }
-        if (max == min) key = max
-        key
-      }
-
-      def open = iter foreach {i => i.open}
-      def up = iter foreach {i => i.up}
-      def key = iter(0).key
-//      def register(it: TrieArray) = iterBuf += it
-    }
-
-    object TrieJoinAlgo {
-      //assign them every time we call "load" method
-      var schema: Schema = null
-      var leapfrog: Vector[Leapfrog] = null
-      var depth = -1
-
-
-      //Register firstly
-      def load(s: Schema, lf: Vector[Leapfrog]): Rep[Unit] = {
-        schema = s
-        leapfrog = lf
-      }
-
-      def init: Rep[Unit] = {}
-      def run (yld: Record => Rep[Unit]): Rep[Unit] = {
-        var lf = leapfrog(0)
-        val res = NewArray[String](leapfrog.length)
-        var cur = 0
-        var needToInit = true
-        depth = 0
-        while (depth != -1) {
-          lf = access[Leapfrog](depth) {i => leapfrog(i)}
-          if (needToInit) {
-            lf.init
-            needToInit = false
-          }
-          if (lf.atEnd) {
-            lf.up
-            depth -= 1
-            if (depth != -1) {(access[Leapfrog](depth) {i => leapfrog(i)}).next; cur -= 1}
-          }
-          else if (depth != leapfrog.length - 1) {
-            res(cur) = lf.key
-            cur += 1
-            depth += 1
-            (access[Leapfrog](depth) {i => leapfrog(i)}).open
-            needToInit = true
-          }
-          else {
-            res(cur) = lf.key
-            val r = {var i = -1; schema.map{f => {i += 1; res(i)}}}
-            yld(Record(r, schema))
-            lf.next
-          }
-        }
-      }
+    object lftjoin {
 
       def access[T:Manifest](i: Rep[Int])(f: Int => T): T = {
         if (i == 0) f(0)
@@ -530,6 +436,8 @@ object query_staged {
         else if (i == 14) f(14)
         else f(15)
       }
+
+      def load(array: Vector[TrieArray], schema: Schema): Rep[Unit] = {}
     }
   }
 }
