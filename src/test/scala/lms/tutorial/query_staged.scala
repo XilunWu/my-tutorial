@@ -131,20 +131,15 @@ object query_staged {
       case LFTJoin(parents) =>
         println("LFTJoin starts!")
         println("Number of relations: " + parents.length)
-        import scala.collection.mutable.ArrayBuffer
         val schemaOfResult = resultSchema(o)
-        val leapfrog = schemaOfResult.map(r => new Leapfrog)
-        val relations = ArrayBuffer[TrieArray]()
-        parents foreach { p =>
+        val buf = parents.map(p => new TrieArrayBuffer(1 << 16, schema, schemaOfResult))
+        (parents, buf).zipped foreach {(p, b) =>
           val schema = resultSchema(p)
           //Let's assume schema keeps in order
-          val buf = new TrieArrayBuffer(1 << 16, schema)
-          execOp(p) {rec => buf += rec.fields}
-          relations += buf.toTrieArray
-          schema foreach {x => leapfrog(x indexOf schemaOfResult).register(relations.last)}
-          println("Succeed: toTrieArray!")
+          execOp(p) {rec => b += rec.fields}
         }
-        TrieJoinAlgo.load(schemaOfResult, leapfrog)
+        val array = buf.toVector.map(b => b.toTrieArray)
+
 
 
     }
@@ -155,8 +150,8 @@ object query_staged {
       ------------------------------
       */
 
-    class TrieArrayBuffer (dataSize: Int, schema: Schema) {
-      val buf = schema.map(f => NewArray[String](dataSize))
+    class TrieArrayBuffer (dataSize: Int, schema: Schema, schemaOfResult: Schema) {
+      val buf = schemaOfResult.map(f => NewArray[String](dataSize))
       var len = 0
       println("This is a TrieArrayBuffer of size: " + dataSize)
 
@@ -423,9 +418,7 @@ object query_staged {
       */
 
     class Leapfrog {
-      import scala.collection.mutable.ArrayBuffer
-      val iterBuf = ArrayBuffer[TrieArray]()
-      var iter: Array[TrieArray] = null
+      var iter: Vector[TrieArray] = null
       var atEnd = false
       var p = 0
 
@@ -469,7 +462,7 @@ object query_staged {
       def open = iter foreach {i => i.open}
       def up = iter foreach {i => i.up}
       def key = iter(0).key
-      def register(it: TrieArray) = iterBuf += it
+//      def register(it: TrieArray) = iterBuf += it
     }
 
     object TrieJoinAlgo {
