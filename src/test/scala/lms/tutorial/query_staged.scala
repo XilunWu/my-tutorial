@@ -423,9 +423,10 @@ object query_staged {
 
       def load(array: Vector[TrieArray], schema: Schema): Rep[Unit] = {schemaOfResult = schema; this.array = array}
       def run(yld: Record => Rep[Unit]): Rep[Unit] = {
+        var arr_sorted = sort(array)
         while (currLv != -1) {
-          if (reachEnd(currLv)) {currLv -= 1; array foreach {a => 
-            if (a.hasCol(currLv)) {a.up; nextElem(currLv)}}}
+          if (atEnd(currLv)) {currLv -= 1; array foreach {a => 
+            if (a.hasCol(currLv)) {a.up; next(currLv)}}}
           else if (currLv != schemaOfResult.length - 1) {
 
           } 
@@ -437,9 +438,13 @@ object query_staged {
         }
       }
       /* Don't forget to handle the case that currLv = -1 */
-      def reachEnd(lv: Rep[Int]): Rep[Boolean] = array.foldLeft(lv == -1)((a, x) => a || x.hasCol(lv) && x.atEnd)
-      def nextElem(lv: Rep[Int]): Rep[Unit] = {
+      def atEnd(lv: Rep[Int]): Rep[Boolean] = array.foldLeft(lv == -1)((a, x) => a || x.hasCol(lv) && x.atEnd)
+      def next(lv: Rep[Int]): Rep[Unit] = {
         if (lv == -1) return;
+
+      }
+      
+      def sort: Vector[TrieArray] = {
 
       }
     }
