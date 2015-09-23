@@ -426,11 +426,21 @@ object query_staged {
         while (currLv != -1) {
           if (reachEnd(currLv)) {currLv -= 1; array foreach {a => 
             if (a.hasCol(currLv)) {a.up; nextElem(currLv)}}}
+          else if (currLv != schemaOfResult.length - 1) {
+
+          } 
+          else {
+            /* don't forget to call NEXT */
+          } 
+
+
         }
       }
-      def reachEnd(lv: Rep[Int]): Rep[Boolean] = array.foldLeft(unit(false))((a, x) => a || x.hasCol(lv) && x.atEnd)
+      /* Don't forget to handle the case that currLv = -1 */
+      def reachEnd(lv: Rep[Int]): Rep[Boolean] = array.foldLeft(lv == -1)((a, x) => a || x.hasCol(lv) && x.atEnd)
       def nextElem(lv: Rep[Int]): Rep[Unit] = {
-        
+        if (lv == -1) return;
+
       }
     }
   }
