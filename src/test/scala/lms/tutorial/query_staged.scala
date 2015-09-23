@@ -221,7 +221,7 @@ object query_staged {
          print("\n")
          j += 1
          }
-         */
+        */
         new TrieArray(schema, schemaOfResult, elemArray, indexArray, lenOfArray)
       }
     }
@@ -417,7 +417,21 @@ object query_staged {
 
 
     object lftjoin {
-      def load(array: Vector[TrieArray], schema: Schema): Rep[Unit] = {}
+      var schemaOfResult: Schema = null
+      var array: Vector[TrieArray] = null
+      var currLv = 0
+
+      def load(array: Vector[TrieArray], schema: Schema): Rep[Unit] = {schemaOfResult = schema; this.array = array}
+      def run(yld: Record => Rep[Unit]): Rep[Unit] = {
+        while (currLv != -1) {
+          if (reachEnd(currLv)) {currLv -= 1; array foreach {a => 
+            if (a.hasCol(currLv)) {a.up; nextElem(currLv)}}}
+        }
+      }
+      def reachEnd(lv: Rep[Int]): Rep[Boolean] = array.foldLeft(unit(false))((a, x) => a || x.hasCol(lv) && x.atEnd)
+      def nextElem(lv: Rep[Int]): Rep[Unit] = {
+        
+      }
     }
   }
 }
