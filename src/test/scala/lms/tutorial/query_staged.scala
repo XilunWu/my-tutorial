@@ -251,7 +251,7 @@ object query_staged {
         else if (i == 14) f(14)
         else f(15)
       }
-      def hasCol(i: Rep[Int]): Rep[Boolean] = col.exists(x => x == i)
+      def hasCol(i: Rep[Int]): Rep[Boolean] = col.foldLeft(unit(false))((a,x) => a || (x == i))
       /**
         Trie iterator interface
         */
@@ -417,26 +417,6 @@ object query_staged {
 
 
     object lftjoin {
-
-      def access[T:Manifest](i: Rep[Int])(f: Int => T): T = {
-        if (i == 0) f(0)
-        else if (i == 1) f(1)
-        else if (i == 2) f(2)
-        else if (i == 3) f(3)
-        else if (i == 4) f(4)
-        else if (i == 5) f(5)
-        else if (i == 6) f(6)
-        else if (i == 7) f(7)
-        else if (i == 8) f(8)
-        else if (i == 9) f(9)
-        else if (i == 10) f(10)
-        else if (i == 11) f(11)
-        else if (i == 12) f(12)
-        else if (i == 13) f(13)
-        else if (i == 14) f(14)
-        else f(15)
-      }
-
       def load(array: Vector[TrieArray], schema: Schema): Rep[Unit] = {}
     }
   }
