@@ -419,33 +419,64 @@ object query_staged {
     object lftjoin {
       var schemaOfResult: Schema = null
       var array: Vector[TrieArray] = null
+      var arr_sorted: Vector[TrieArray] = null
       var currLv = 0
+      var k = 0
+      var p = 0
+      var res: NewArray[String] = null
 
-      def load(array: Vector[TrieArray], schema: Schema): Rep[Unit] = {schemaOfResult = schema; this.array = array}
+      def load(array: Vector[TrieArray], schema: Schema): Rep[Unit] = {
+        schemaOfResult = schema; this.array = array; res = NewArray[String](schemaOfResult.length)
+      }
       def run(yld: Record => Rep[Unit]): Rep[Unit] = {
-        var arr_sorted = sort(array)
+        init
         while (currLv != -1) {
           if (atEnd(currLv)) {currLv -= 1; array foreach {a => 
-            if (a.hasCol(currLv)) {a.up; next(currLv)}}}
+            if (a.hasCol(currLv)) a.up}}
           else if (currLv != schemaOfResult.length - 1) {
-
+            pushIntoRes(key)
+            open
           } 
           else {
             /* don't forget to call NEXT */
+            pushIntoRes(key)
+            yld(makeRecord)
+            next
           } 
-
-
         }
       }
+
+      def inc(x: Var[Int]): Var[Int] = {p += 1; if (p == k) p = 0}
       /* Don't forget to handle the case that currLv = -1 */
+      def key: Rep[String] = arr_sorted(0).key
       def atEnd(lv: Rep[Int]): Rep[Boolean] = array.foldLeft(lv == -1)((a, x) => a || x.hasCol(lv) && x.atEnd)
       def next(lv: Rep[Int]): Rep[Unit] = {
         if (lv == -1) return;
-
+        var x = access[String](p){i => arr_sorted(i).key}
+        p = inc(p)
+        while(true) {
+          var y = access[String](p){i => arr_sorted(i).key}
+          if (x == y) {return y}
+          else {
+            access[Unit](p){i => arr_sorted(i).seek(x)}
+            if (true == access[Boolean](p){i => arr_sorted(i).atEnd}) return;
+            else {
+              x = access[String](p){i => arr_sorted(i).key}
+              p = inc(p)
+            }
+          }
+        }
       }
-      
+      def seek(seekKey: Rep[String]): Rep[Unit] = {}
+      def search: Rep[Unit] = {}
+
+      def init: Rep[Unit] = {}
       def sort: Vector[TrieArray] = {
 
+      }
+
+      def makeRecord: Record = {
+        //Record(res, schemaOfResult)
       }
     }
   }
