@@ -434,7 +434,7 @@ object query_staged {
         init
         //level starts from 0 and ends at -1
         while (currLv != -1) {
-          if (atEnd(currLv)) {currLv -= 1; array foreach {a => 
+          if (atEnd(currLv)) {currLv -= 1; k -= 1; array foreach {a => 
             if (a.hasCol(currLv)) a.up}}
           else if (currLv != schemaOfResult.length - 1) {
             pushIntoRes(key)
@@ -444,15 +444,14 @@ object query_staged {
             /* don't forget to call NEXT */
             pushIntoRes(key)
             yld(makeRecord)
+            k -= 1
             next
           } 
         }
       }
 
       def inc(x: Var[Int]): Var[Int] = {p += 1; if (p == k) p = 0; p}
-      /* Don't forget to handle the case that currLv = -1 */
-      def key: Rep[String] = arr_sorted(0).key
-      def atEnd(lv: Rep[Int]): Rep[Boolean] = array.foldLeft(unit(false))((a, x) => a || x.hasCol(lv) && x.atEnd)
+      
       def next: Rep[Unit] = {
         access[Unit](p){i => arr_sorted(i).next}
         if (access[Boolean](p){i => arr_sorted(i).atEnd})
@@ -478,7 +477,7 @@ object query_staged {
           if (x == y) return;
           else {
             access[Unit](p){i => arr_sorted(i).seek(x)}
-            if (true == access[Boolean](p){i => arr_sorted(i).atEnd}) return;
+            if (access[Boolean](p){i => arr_sorted(i).atEnd}) return;
             else {
               x = access[String](p){i => arr_sorted(i).key}
               p = inc(p)
@@ -487,12 +486,38 @@ object query_staged {
         }
       }
       def init: Rep[Unit] = {
-
+        if (atEnd(currLv)) return;
+        else {
+          sort
+          p = 0
+          search
+        }
       }
-      def open: Rep[Unit] = {}
-      def up: Rep[Unit] = {}
-      def sort: Vector[TrieArray] = {
-        array.map{x => x}
+    
+      def key: Rep[String] = arr_sorted(0).key
+      def atEnd(lv: Rep[Int]): Rep[Boolean] = array.foldLeft(unit(false))((a, x) => a || x.hasCol(lv) && x.atEnd)
+
+      def open: Rep[Unit] = {
+        currLv += 1
+        p = 0
+        while(p < k) {
+          access[Unit](p){i => arr_sorted(i).open}
+          p += 1
+        }
+        init
+      }
+      def up: Rep[Unit] = {
+        p = 0
+        while(p < k) {
+          access[Unit](p){i => arr_sorted(i).up}
+          p += 1
+        }
+        currLv -= 1
+        init
+      }
+      def sort: Rep[Unit] = {
+        //set arr_sorted
+        
       }
 
       def makeRecord: Record = {
@@ -501,7 +526,10 @@ object query_staged {
         val key = schemaOfResult.map{x => {i += 1; res(i)}}
         Record(key, schemaOfResult)
       }
-      def pushIntoRes(key: Rep[String]) = {}
+      def pushIntoRes(key: Rep[String]) = {
+        res(k) = key
+        k += 1
+      }
     }
   }
 }
