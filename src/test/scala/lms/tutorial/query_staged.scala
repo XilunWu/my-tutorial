@@ -11,11 +11,29 @@ package scala.lms.tutorial
 import scala.virtualization.lms.common._
 
 object query_staged {
-
-
   trait QueryCompiler extends Dsl with StagedQueryProcessor
       with ScannerBase {
     override def version = "query_staged"
+
+      //method to access element in Vector using Rep[Int] as subscript
+      def access[T:Manifest](i: Rep[Int])(f: Int => Rep[T]): Rep[T] = {
+        if (i == 0) f(0)
+        else if (i == 1) f(1)
+        else if (i == 2) f(2)
+        else if (i == 3) f(3)
+        else if (i == 4) f(4)
+        else if (i == 5) f(5)
+        else if (i == 6) f(6)
+        else if (i == 7) f(7)
+        else if (i == 8) f(8)
+        else if (i == 9) f(9)
+        else if (i == 10) f(10)
+        else if (i == 11) f(11)
+        else if (i == 12) f(12)
+        else if (i == 13) f(13)
+        else if (i == 14) f(14)
+        else f(15)
+      }
 
     /**
       Low-Level Processing Logic
@@ -131,6 +149,7 @@ object query_staged {
       case LFTJoin(parents) =>
         println("LFTJoin starts!")
         println("Number of relations: " + parents.length)
+        
         val schemaOfResult = resultSchema(o)
         val buf = parents.map(p => new TrieArrayBuffer(1 << 16, resultSchema(p), schemaOfResult))
         (parents, buf).zipped foreach {(p, b) =>
@@ -138,9 +157,11 @@ object query_staged {
           //Let's assume schema keeps in order
           execOp(p) {rec => b += rec.fields}
         }
-        val array = buf.toVector.map(b => b.toTrieArray)
-        lftjoin.load(array, schemaOfResult)
 
+        val array = buf.toVector.map(b => b.toTrieArray)
+        //bug in load()
+        lftjoin.load(array, schemaOfResult)
+        
 
     }
     def execQuery(q: Operator): Unit = execOp(q) { _ => }
@@ -232,25 +253,6 @@ object query_staged {
       val currPos = NewArray[Int](schema.length)  //  current pos of cursor in each level
       for (i <- 0 until currPos.length) {currPos(i) = 0; println(currPos(i))}
 
-      //method to access element in Vector using Rep[Int] as subscript
-      def access[T:Manifest](i: Rep[Int])(f: Int => Rep[T]): Rep[T] = {
-        if (i == 0) f(0)
-        else if (i == 1) f(1)
-        else if (i == 2) f(2)
-        else if (i == 3) f(3)
-        else if (i == 4) f(4)
-        else if (i == 5) f(5)
-        else if (i == 6) f(6)
-        else if (i == 7) f(7)
-        else if (i == 8) f(8)
-        else if (i == 9) f(9)
-        else if (i == 10) f(10)
-        else if (i == 11) f(11)
-        else if (i == 12) f(12)
-        else if (i == 13) f(13)
-        else if (i == 14) f(14)
-        else f(15)
-      }
       def hasCol(i: Rep[Int]): Rep[Boolean] = col.foldLeft(unit(false))((a,x) => a || (x == i))
       /**
         Trie iterator interface
@@ -423,13 +425,14 @@ object query_staged {
       var currLv = 0
       var k = 0
       var p = 0
-      var res: NewArray[String] = null
+      var res = NewArray[String](schemaOfResult.length)
 
       def load(array: Vector[TrieArray], schema: Schema): Rep[Unit] = {
         schemaOfResult = schema; this.array = array; res = NewArray[String](schemaOfResult.length)
       }
       def run(yld: Record => Rep[Unit]): Rep[Unit] = {
         init
+        //level starts from 0 and ends at -1
         while (currLv != -1) {
           if (atEnd(currLv)) {currLv -= 1; array foreach {a => 
             if (a.hasCol(currLv)) a.up}}
@@ -446,17 +449,33 @@ object query_staged {
         }
       }
 
-      def inc(x: Var[Int]): Var[Int] = {p += 1; if (p == k) p = 0}
+      def inc(x: Var[Int]): Var[Int] = {p += 1; if (p == k) p = 0; p}
       /* Don't forget to handle the case that currLv = -1 */
       def key: Rep[String] = arr_sorted(0).key
-      def atEnd(lv: Rep[Int]): Rep[Boolean] = array.foldLeft(lv == -1)((a, x) => a || x.hasCol(lv) && x.atEnd)
-      def next(lv: Rep[Int]): Rep[Unit] = {
-        if (lv == -1) return;
+      def atEnd(lv: Rep[Int]): Rep[Boolean] = array.foldLeft(unit(false))((a, x) => a || x.hasCol(lv) && x.atEnd)
+      def next: Rep[Unit] = {
+        access[Unit](p){i => arr_sorted(i).next}
+        if (access[Boolean](p){i => arr_sorted(i).atEnd})
+          return;
+        else {
+          inc(p)
+          search
+        }        
+      }
+      def seek(seekKey: Rep[String]): Rep[Unit] = {
+        access[Unit](p){i => arr_sorted(i).seek(seekKey)}
+        if (access[Boolean](p){i => arr_sorted(i).atEnd}) return;
+        else {
+          inc(p)
+          search
+        }
+      }
+      def search: Rep[Unit] = {
         var x = access[String](p){i => arr_sorted(i).key}
         p = inc(p)
         while(true) {
           var y = access[String](p){i => arr_sorted(i).key}
-          if (x == y) {return y}
+          if (x == y) return;
           else {
             access[Unit](p){i => arr_sorted(i).seek(x)}
             if (true == access[Boolean](p){i => arr_sorted(i).atEnd}) return;
@@ -467,17 +486,22 @@ object query_staged {
           }
         }
       }
-      def seek(seekKey: Rep[String]): Rep[Unit] = {}
-      def search: Rep[Unit] = {}
+      def init: Rep[Unit] = {
 
-      def init: Rep[Unit] = {}
+      }
+      def open: Rep[Unit] = {}
+      def up: Rep[Unit] = {}
       def sort: Vector[TrieArray] = {
-
+        array.map{x => x}
       }
 
       def makeRecord: Record = {
         //Record(res, schemaOfResult)
+        var i = -1;
+        val key = schemaOfResult.map{x => {i += 1; res(i)}}
+        Record(key, schemaOfResult)
       }
+      def pushIntoRes(key: Rep[String]) = {}
     }
   }
 }
