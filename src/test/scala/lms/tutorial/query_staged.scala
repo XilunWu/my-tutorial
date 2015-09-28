@@ -159,10 +159,12 @@ object query_staged {
         }
 
         val array = buf.toVector.map(b => b.toTrieArray)
+        println("load(): ")
+        array foreach {a => a.output; print('\n')}
         //bug in load()
-        lftjoin.load(array, schemaOfResult)
-        
-
+        val lftjoin = new LFTJoinAlgo
+        //lftjoin.load(array, schemaOfResult)
+        //lftjoin.run(yld)
     }
     def execQuery(q: Operator): Unit = execOp(q) { _ => }
 
@@ -221,14 +223,14 @@ object query_staged {
           }
           i += 1
         }
-        /*
+        
          j = 0
          while (j < schema.length) {
-         lenOfArray(j) = next(j) 
-         print("j = " + j + " lenOfArray = " + lenOfArray(j) + " ")
-         j += 1
+          lenOfArray(j) = next(j) 
+          //print("j = " + j + " lenOfArray = " + lenOfArray(j) + " ")
+          j += 1
          }; print('\n')
-
+        /*
          j = 0
          for(x <- elemArray) {
          println("j = " + j + " lenOfArray = " + lenOfArray(j))
@@ -253,23 +255,48 @@ object query_staged {
       val currPos = NewArray[Int](schema.length)  //  current pos of cursor in each level
       for (i <- 0 until currPos.length) {currPos(i) = 0; println(currPos(i))}
 
-      def hasCol(i: Rep[Int]): Rep[Boolean] = col.foldLeft(unit(false))((a,x) => a || (x == i))
+      def output: Rep[Unit] = {
+        println("schema: ")
+        schema foreach(x => {print(x + " "); print((x indexOf schemaOfResult) + " ")})
+        print('\n')
+        schemaOfResult foreach(x => print(x + " "))
+
+        col foreach {x => print(x + " ")}; print('\n')
+        println("value: " + schemaOfResult.length)
+        len foreach {l => print(l + " ")}; print('\n')
+        
+        var i = 0
+        for (i <- 0 until schemaOfResult.length){
+          var j = 0
+          while (j < len(i)) {
+            //print(access[String](i){i => value(i)(j)} + " ")
+            j += 1
+          }
+          print(j + " " + i + '\n')
+        }
+      }
+
+      def hasCol(i: Rep[Int]): Rep[Boolean] = {
+        //For test
+         true
+        //col.foldLeft(unit(false))((a,x) => a || (x == i))
+      }
       /**
         Trie iterator interface
         */
       def key: Rep[String] = {
-        access[String](currLv) { i => value(i)(currPos(currLv))}
+        access[String](currLv) { i => value(i)(currPos(i))}
       }
       def next: Rep[Unit] = currPos(currLv) = currPos(currLv) + 1
       def atEnd: Rep[Boolean] = {
         if (currPos(currLv) == len(currLv)) true
-        else if (currLv != 0 && currPos(currLv) == access[Int](currLv) {i => index(i)(currPos(currLv))}) true
+        else if (currLv != 0 && currPos(currLv) == access[Int](currLv) {i => index(i)(currPos(i))}) true
         else false
       }
       def seek(seekKey: Rep[String]): Rep[Unit] = {
         //put currPos onto correct position where key is the first key which >= seekKey
-        val start = access[Int](currLv) {i => index(i)(currPos(currLv - 1))}
-        val end = access[Int](currLv) {i => index(i + 1)(currPos(currLv - 1))}
+        val start = access[Int](currLv) {i => index(i)(currPos(i - 1))}
+        val end = access[Int](currLv) {i => index(i + 1)(currPos(i - 1))}
         binSearch(seekKey, start, end)
         /**
           Helper function
@@ -283,7 +310,7 @@ object query_staged {
           }
         }
       }
-      def open: Rep[Unit] = {currPos(currLv + 1) = access[Int](currLv){i => index(i)(currPos(currLv))}; currLv += 1}
+      def open: Rep[Unit] = {currPos(currLv + 1) = access[Int](currLv){i => index(i)(currPos(i))}; currLv += 1}
       def up: Rep[Unit] = currLv -= 1
     }
     
@@ -418,7 +445,7 @@ object query_staged {
       */
 
 
-    object lftjoin {
+    class LFTJoinAlgo {
       var schemaOfResult: Schema = null
       var array: Vector[TrieArray] = null
       var arr_sorted: Vector[TrieArray] = null
@@ -428,7 +455,11 @@ object query_staged {
       var res = NewArray[String](schemaOfResult.length)
 
       def load(array: Vector[TrieArray], schema: Schema): Rep[Unit] = {
-        schemaOfResult = schema; this.array = array; res = NewArray[String](schemaOfResult.length)
+        println("load()")
+        schemaOfResult = schema
+        this.array = array
+        println(schemaOfResult.length)
+        res = NewArray[String](schemaOfResult.length)
       }
       def run(yld: Record => Rep[Unit]): Rep[Unit] = {
         init
@@ -517,7 +548,8 @@ object query_staged {
       }
       def sort: Rep[Unit] = {
         //set arr_sorted
-        
+        //For test. 
+        arr_sorted = array
       }
 
       def makeRecord: Record = {
