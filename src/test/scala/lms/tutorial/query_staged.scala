@@ -163,8 +163,8 @@ object query_staged {
         array foreach {a => a.output; print('\n')}
         //bug in load()
         val lftjoin = new LFTJoinAlgo
-        //lftjoin.load(array, schemaOfResult)
-        //lftjoin.run(yld)
+        lftjoin.load(array, schemaOfResult)
+        lftjoin.run(yld)
     }
     def execQuery(q: Operator): Unit = execOp(q) { _ => }
 
@@ -452,7 +452,7 @@ object query_staged {
       var currLv = 0
       var k = 0
       var p = 0
-      var res = NewArray[String](schemaOfResult.length)
+      var res: Rep[Array[String]] = NewArray[String](1)
 
       def load(array: Vector[TrieArray], schema: Schema): Rep[Unit] = {
         println("load()")
@@ -463,8 +463,10 @@ object query_staged {
       }
       def run(yld: Record => Rep[Unit]): Rep[Unit] = {
         init
+        println("init done!")
         //level starts from 0 and ends at -1
         while (currLv != -1) {
+          println(currLv)
           if (atEnd(currLv)) {currLv -= 1; k -= 1; array foreach {a => 
             if (a.hasCol(currLv)) a.up}}
           else if (currLv != schemaOfResult.length - 1) {
@@ -559,7 +561,7 @@ object query_staged {
         Record(key, schemaOfResult)
       }
       def pushIntoRes(key: Rep[String]) = {
-        res(k) = key
+        res.update(k, key)
         k += 1
       }
     }
