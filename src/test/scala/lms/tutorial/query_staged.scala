@@ -162,9 +162,11 @@ object query_staged {
         println("load(): ")
         array foreach {a => a.output; print('\n')}
         //bug in load()
+        /*
         val lftjoin = new LFTJoinAlgo
         lftjoin.load(array, schemaOfResult)
         lftjoin.run(yld)
+        */
     }
     def execQuery(q: Operator): Unit = execOp(q) { _ => }
 
@@ -189,6 +191,8 @@ object query_staged {
         buf.map(b => b(i))
       }
       def sort: Rep[Unit] = {}
+
+      /*  print the result for the sake of debug  */
       def toTrieArray: TrieArray = {
         val elemArray = schema.map(f => NewArray[String](dataSize))
         val indexArray = schema.map(f => NewArray[Int](dataSize))
@@ -224,12 +228,13 @@ object query_staged {
           i += 1
         }
         
-         j = 0
-         while (j < schema.length) {
+        j = 0
+        while (j < schema.length) {
           lenOfArray(j) = next(j) 
           //print("j = " + j + " lenOfArray = " + lenOfArray(j) + " ")
           j += 1
-         }; print('\n')
+        }
+        print('\n')
         /*
          j = 0
          for(x <- elemArray) {
@@ -245,6 +250,26 @@ object query_staged {
          j += 1
          }
         */
+        
+        var k = 0
+        i = 0
+        var track = NewArray[Int](schema.length)
+        var res = NewArray[String](schema.length)
+        println("track is of size: " + track.length)
+        /*
+        while (k != 0 || !atEnd(k, i)) {
+          if (atEnd(k, i) && k != 0) {k -= 1; i = track(k) + 1 /*  up 1 level, modify i  */}
+          else if (k != schema.length - 1) {push(k, i); track(k) = i; k += 1; i = access[Int](k){k => indexArray(k)(i)}}
+          else {push(k, i); dumpArray; i += 1}
+        }
+        
+        def atEnd(k: Rep[Int], i: Rep[Int]): Rep[Boolean] = {
+          if (k == 0) return i == lenOfArray(0)
+          else return i == access[Int](k - 1){k => indexArray(k)(track(k) + 1)}
+        }
+        def push(k: Rep[Int], i: Rep[Int]): Rep[Unit] = res(k) = access[String](k){k => elemArray(k)(i)}
+        def dumpArray: Rep[Unit] = {res foreach (x => print(x + " ")); print('\n')}
+        */
         new TrieArray(schema, schemaOfResult, elemArray, indexArray, lenOfArray)
       }
     }
@@ -257,22 +282,23 @@ object query_staged {
 
       def output: Rep[Unit] = {
         println("schema: ")
-        schema foreach(x => {print(x + " "); print((x indexOf schemaOfResult) + " ")})
-        print('\n')
-        schemaOfResult foreach(x => print(x + " "))
-
+        schema foreach(x => print(x + " ")); print('\n')
+        println("resultSchema: ")
         col foreach {x => print(x + " ")}; print('\n')
         println("value: " + schemaOfResult.length)
+        println("lenOfArray: ")
         len foreach {l => print(l + " ")}; print('\n')
         
         var i = 0
+        var j = 0
         for (i <- 0 until schemaOfResult.length){
-          var j = 0
+          j = 0
           while (j < len(i)) {
             //print(access[String](i){i => value(i)(j)} + " ")
             j += 1
           }
-          print(j + " " + i + '\n')
+          print(j + " " + i)
+          print('\n')
         }
       }
 
@@ -452,7 +478,7 @@ object query_staged {
       var currLv = 0
       var k = 0
       var p = 0
-      var res: Rep[Array[String]] = NewArray[String](1)
+      var res = NewArray[String](0)
 
       def load(array: Vector[TrieArray], schema: Schema): Rep[Unit] = {
         println("load()")
