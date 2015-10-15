@@ -21,6 +21,8 @@ object query_staged {
         else if (i == 1) f(1)
         else if (i == 2) f(2)
         else if (i == 3) f(3)
+        else f(3)
+        /*
         else if (i == 4) f(4)
         else if (i == 5) f(5)
         else if (i == 6) f(6)
@@ -33,6 +35,7 @@ object query_staged {
         else if (i == 13) f(13)
         else if (i == 14) f(14)
         else f(15)
+        */
       }
 
     /**
@@ -162,11 +165,11 @@ object query_staged {
         println("load(): ")
         array foreach {a => a.output; print('\n')}
         //bug in load()
-        /*
+        
         val lftjoin = new LFTJoinAlgo
         lftjoin.load(array, schemaOfResult)
         lftjoin.run(yld)
-        */
+        
     }
     def execQuery(q: Operator): Unit = execOp(q) { _ => }
 
@@ -294,7 +297,7 @@ object query_staged {
         for (i <- 0 until schemaOfResult.length){
           j = 0
           while (j < len(i)) {
-            //print(access[String](i){i => value(i)(j)} + " ")
+            print(access[String](i){i => if (i >= 4 || j >= len(i)) "indexOutOfBound!" else value(i)(j)} + " ")
             j += 1
           }
           print(j + " " + i)
