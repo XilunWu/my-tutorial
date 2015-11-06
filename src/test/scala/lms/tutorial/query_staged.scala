@@ -164,11 +164,10 @@ object query_staged {
         val array = buf.toVector.map(b => b.toTrieArray)
         println("load(): ")
         array foreach {a => a.output; print('\n')}
-        //bug in load()
         
         val lftjoin = new LFTJoinAlgo
         lftjoin.load(array, schemaOfResult)
-        lftjoin.run(yld)
+        //lftjoin.run(yld)
         
     }
     def execQuery(q: Operator): Unit = execOp(q) { _ => }
