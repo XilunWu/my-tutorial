@@ -573,46 +573,49 @@ object query_staged {
             k -= 1
             next
           } 
+          print()
         }
       }
 
-      def inc(x: Var[Int]): Var[Int] = {p += 1; if (p == k) p = 0; p}
+      def inc(): Rep[Int] = {p = (p + 1) % array.length; p}
       
-      def next: Rep[Unit] = {
+      def next: Rep[Int] = {
         access[Unit](p){i => callNext(i, arr_sorted)}
         if (access[Boolean](p){i => callAtEnd(i, arr_sorted)})
-          return;
+          return 0;
         else {
-          inc(p)
+          inc
           search
         }        
       }
-      def seek(seekKey: Rep[String]): Rep[Unit] = {
+      def seek(seekKey: Rep[String]): Rep[Int] = {
         access[Unit](p){i => callSeek(i, seekKey, arr_sorted)}
-        if (access[Boolean](p){i => callAtEnd(i, arr_sorted)}) return;
+        if (access[Boolean](p){i => callAtEnd(i, arr_sorted)}) return 0;
         else {
-          inc(p)
+          inc
           search
         }
       }
-      def search: Rep[Unit] = {
+      def search: Rep[Int] = {
         var x = access[String](p){i => callKey(i, arr_sorted)}
-        p = inc(p)
+        inc
         while(true) {
           var y = access[String](p){i => callKey(i, arr_sorted)}
-          if (x == y) return;
+          if (x == y) return 0;
           else {
             access[Unit](p){i => callSeek(i, x, arr_sorted)}
-            if (access[Boolean](p){i => callAtEnd(i, arr_sorted)}) return;
+            if (access[Boolean](p){i => callAtEnd(i, arr_sorted)}) return 0;
             else {
               x = access[String](p){i => callKey(i, arr_sorted)}
-              p = inc(p)
+              inc
             }
           }
+          print()
         }
+        return 0;
       }
-      def init: Rep[Unit] = {
-        if (atEnd(currLv)) return;
+      def init: Rep[Int] = {
+        if (atEnd(currLv)) return 0;
         else {
           sort
           p = 0
@@ -623,7 +626,7 @@ object query_staged {
       def key: Rep[String] = arr_sorted(0).key
       def atEnd(lv: Rep[Int]): Rep[Boolean] = array.foldLeft(unit(false))((a, x) => a || x.hasCol(lv) && x.atEnd)
 
-      def open: Rep[Unit] = {
+      def open: Rep[Int] = {
         currLv += 1
         p = 0
         while(p < k) {
@@ -632,7 +635,7 @@ object query_staged {
         }
         init
       }
-      def up: Rep[Unit] = {
+      def up: Rep[Int] = {
         p = 0
         while(p < k) {
           access[Unit](p){i => callUp(i, arr_sorted)}
