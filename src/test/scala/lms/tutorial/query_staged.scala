@@ -38,6 +38,70 @@ object query_staged {
         */
       }
 
+      def getIndex(i: Int, j: Rep[Int], vec: Vector[Rep[Array[Int]]]): Rep[Int] = {
+        if (i < vec.length) {
+          return vec(i)(j)
+        }
+        else
+          return unit(0)
+      }
+
+      def getElem(i: Int, j: Rep[Int], vec: Vector[Rep[Array[String]]]): Rep[String] = {
+        if (i < vec.length) {
+          return vec(i)(j)
+        }
+        else
+          return unit("")
+      }
+
+      def callKey(i: Int, vec: Vector[TrieArray]): Rep[String] = {
+        if (i < vec.length) {
+          return vec(i).key
+        }
+        else
+          return unit("")
+      }
+
+      def callNext(i: Int, vec: Vector[TrieArray]): Rep[Unit] = {
+        if (i < vec.length) {
+          return vec(i).next
+        }
+        else
+          return unit()
+      }
+
+      def callAtEnd(i: Int, vec: Vector[TrieArray]): Rep[Boolean] = {
+        if (i < vec.length) {
+          return vec(i).atEnd
+        }
+        else
+          return unit(true)
+      }
+
+      def callOpen(i: Int, vec: Vector[TrieArray]): Rep[Unit] = {
+        if (i < vec.length) {
+          return vec(i).open
+        }
+        else
+          return unit()
+      }
+
+      def callUp(i: Int, vec: Vector[TrieArray]): Rep[Unit] = {
+        if (i < vec.length) {
+          return vec(i).up
+        }
+        else
+          return unit()
+      }
+
+      def callSeek(i: Int, x: Rep[String], vec: Vector[TrieArray]): Rep[Unit] = {
+        if (i < vec.length) {
+          return vec(i).seek(x)
+        }
+        else
+          return unit()
+      }
+
     /**
       Low-Level Processing Logic
       --------------------------
@@ -167,7 +231,7 @@ object query_staged {
         
         val lftjoin = new LFTJoinAlgo
         lftjoin.load(array, schemaOfResult)
-        //lftjoin.run(yld)
+        lftjoin.run(yld)
         
     }
     def execQuery(q: Operator): Unit = execOp(q) { _ => }
@@ -296,7 +360,7 @@ object query_staged {
         for (i <- 0 until schemaOfResult.length){
           j = 0
           while (j < len(i)) {
-            print(access[String](i){i => if (i >= 4 || j >= len(i)) "indexOutOfBound!" else value(i)(j)} + " ")
+            print(access[String](i){i => getElem(i, j, value)} + " ")
             j += 1
           }
           print(j + " " + i)
@@ -313,18 +377,19 @@ object query_staged {
         Trie iterator interface
         */
       def key: Rep[String] = {
-        access[String](currLv) { i => value(i)(currPos(i))}
+        //access[String](currLv) { i => value(i)(currPos(i))}
+        access[String](currLv){i => getElem(i, currPos(i), value)}
       }
       def next: Rep[Unit] = currPos(currLv) = currPos(currLv) + 1
       def atEnd: Rep[Boolean] = {
         if (currPos(currLv) == len(currLv)) true
-        else if (currLv != 0 && currPos(currLv) == access[Int](currLv) {i => index(i)(currPos(i))}) true
+        else if (currLv != 0 && currPos(currLv) == access[Int](currLv) {i => getIndex(i, currPos(i), index)}) true
         else false
       }
       def seek(seekKey: Rep[String]): Rep[Unit] = {
         //put currPos onto correct position where key is the first key which >= seekKey
-        val start = access[Int](currLv) {i => index(i)(currPos(i - 1))}
-        val end = access[Int](currLv) {i => index(i + 1)(currPos(i - 1))}
+        val start = access[Int](currLv){i => getIndex(i - 1, currPos(i - 1), index)}
+        val end = access[Int](currLv){i => getIndex(i - 1, currPos(i - 1) + 1, index)}
         binSearch(seekKey, start, end)
         /**
           Helper function
@@ -332,13 +397,13 @@ object query_staged {
         def binSearch(seekKey: Rep[String], start: Rep[Int], end: Rep[Int]): Rep[Unit] = {
           if (start == end) currPos(currLv) = start
           else {
-            val pivot = access[String](currLv){i => value(i)((start + end) / 2)}
+            val pivot = access[String](currLv){i => getElem(i, (start + end) / 2, value)}
             if (pivot <= seekKey) binSearch(seekKey, (start + end) / 2 + 1, end)
             else binSearch(seekKey, start, (start + end) / 2)
           }
         }
       }
-      def open: Rep[Unit] = {currPos(currLv + 1) = access[Int](currLv){i => index(i)(currPos(i))}; currLv += 1}
+      def open: Rep[Unit] = {currPos(currLv + 1) = access[Int](currLv){i => getIndex(i, currPos(i), index)}; currLv += 1}
       def up: Rep[Unit] = currLv -= 1
     }
     
@@ -514,8 +579,8 @@ object query_staged {
       def inc(x: Var[Int]): Var[Int] = {p += 1; if (p == k) p = 0; p}
       
       def next: Rep[Unit] = {
-        access[Unit](p){i => arr_sorted(i).next}
-        if (access[Boolean](p){i => arr_sorted(i).atEnd})
+        access[Unit](p){i => callNext(i, arr_sorted)}
+        if (access[Boolean](p){i => callAtEnd(i, arr_sorted)})
           return;
         else {
           inc(p)
@@ -523,24 +588,24 @@ object query_staged {
         }        
       }
       def seek(seekKey: Rep[String]): Rep[Unit] = {
-        access[Unit](p){i => arr_sorted(i).seek(seekKey)}
-        if (access[Boolean](p){i => arr_sorted(i).atEnd}) return;
+        access[Unit](p){i => callSeek(i, seekKey, arr_sorted)}
+        if (access[Boolean](p){i => callAtEnd(i, arr_sorted)}) return;
         else {
           inc(p)
           search
         }
       }
       def search: Rep[Unit] = {
-        var x = access[String](p){i => arr_sorted(i).key}
+        var x = access[String](p){i => callKey(i, arr_sorted)}
         p = inc(p)
         while(true) {
-          var y = access[String](p){i => arr_sorted(i).key}
+          var y = access[String](p){i => callKey(i, arr_sorted)}
           if (x == y) return;
           else {
-            access[Unit](p){i => arr_sorted(i).seek(x)}
-            if (access[Boolean](p){i => arr_sorted(i).atEnd}) return;
+            access[Unit](p){i => callSeek(i, x, arr_sorted)}
+            if (access[Boolean](p){i => callAtEnd(i, arr_sorted)}) return;
             else {
-              x = access[String](p){i => arr_sorted(i).key}
+              x = access[String](p){i => callKey(i, arr_sorted)}
               p = inc(p)
             }
           }
@@ -562,7 +627,7 @@ object query_staged {
         currLv += 1
         p = 0
         while(p < k) {
-          access[Unit](p){i => arr_sorted(i).open}
+          access[Unit](p){i => callOpen(i, arr_sorted)}
           p += 1
         }
         init
@@ -570,7 +635,7 @@ object query_staged {
       def up: Rep[Unit] = {
         p = 0
         while(p < k) {
-          access[Unit](p){i => arr_sorted(i).up}
+          access[Unit](p){i => callUp(i, arr_sorted)}
           p += 1
         }
         currLv -= 1
