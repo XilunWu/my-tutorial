@@ -377,6 +377,8 @@ object query_staged {
       def next: Rep[Unit] = currPos(currLv) = currPos(currLv) + 1
       def atEnd: Rep[Boolean] = {
         if (currPos(currLv) == len(currLv)) true
+        else if (currLv != 0 && currPos(currLv - 1) + 1 == len(currLv - 1) && currPos(currLv) == len(currLv)) true
+        else if (currLv != 0 && currPos(currLv - 1) + 1 == len(currLv - 1) && currPos(currLv) != len(currLv)) false
         else if (currLv != 0 && currPos(currLv) == access[Int](currLv - 1) {i => getIndex(i, currPos(i) + 1, index)}) true
         else false
       }
@@ -391,7 +393,11 @@ object query_staged {
         }
         else {
           start = access[Int](currLv - 1){i => getIndex(i, currPos(i), index)}
-          end = access[Int](currLv - 1){i => getIndex(i, currPos(i) + 1, index)}
+          //if the upper level reaches the last element
+          if (currPos(currLv - 1) + 1 == len(currLv - 1))
+            end = len(currLv)
+          else
+            end = access[Int](currLv - 1){i => getIndex(i, currPos(i) + 1, index)}
         }
         println("currLv = " + currLv + " seekKey = " + seekKey + " start = " + start + " end = " + end)
         binSearch(seekKey, start, end)
@@ -610,13 +616,16 @@ object query_staged {
       }
       //Don't use return/break/continue!!! use while(condition statement do all staff) {empty statement} to replace do...while() 
       def search: Rep[Unit] = {
-        var x = access[String]((p - 1) % array.length){i => callKey(i, arr_sorted)}
+        var maxp = 0
+        if (p == 0) maxp = array.length - 1
+        else maxp = (p - 1) % array.length
+        var x = access[String](maxp){i => callKey(i, arr_sorted)}
         //inc
-        println("p = " + p + "key = " + x)
+        println("p = " + maxp + " key = " + x)
         var flag = true
         while({
           var y = access[String](p){i => callKey(i, arr_sorted)}
-          println("p = " + p + "key = " + x + "Boolean = " + (x == y))
+          println("p = " + p + " key = " + y + " Boolean = " + (x == y))
           if (x == y) {flag = false}
           else {
             access[Unit](p){i => callSeek(i, x, arr_sorted)}
@@ -633,6 +642,7 @@ object query_staged {
       def init: Rep[Unit] = {
         if (!atEnd(currLv)) {
           sort
+//          arr_sorted foreach {a => a.output; print("\n")}
           p = 0
           search
         }
@@ -643,18 +653,18 @@ object query_staged {
 
       def open: Rep[Unit] = {
         currLv += 1
-        p = 0
-        while(p < k) {
-          access[Unit](p){i => callOpen(i, arr_sorted)}
-          p += 1
+        var i = 0
+        while(i < array.length) {
+          access[Unit](i){i => callOpen(i, arr_sorted)}
+          i += 1
         }
         init
       }
       def up: Rep[Unit] = {
-        p = 0
-        while(p < k) {
-          access[Unit](p){i => callUp(i, arr_sorted)}
-          p += 1
+        var i = 0
+        while(i < array.length) {
+          access[Unit](i){i => callUp(i, arr_sorted)}
+          i += 1
         }
         currLv -= 1
         init
