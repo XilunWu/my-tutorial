@@ -611,7 +611,7 @@ object query_staged {
       //Don't use return/break/continue!!! use while(condition statement do all staff) {empty statement} to replace do...while() 
       def search: Rep[Unit] = {
         var x = access[String]((p - 1) % array.length){i => callKey(i, arr_sorted)}
-        inc
+        //inc
         println("p = " + p + "key = " + x)
         var flag = true
         while({
