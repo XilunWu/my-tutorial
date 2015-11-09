@@ -66,8 +66,6 @@ object query_staged {
         if (i < vec.length) {
           return vec(i).next
         }
-        else
-          return unit()
       }
 
       def callAtEnd(i: Int, vec: Vector[TrieArray]): Rep[Boolean] = {
@@ -75,31 +73,27 @@ object query_staged {
           return vec(i).atEnd
         }
         else
-          return unit(true)
+          return true
       }
 
       def callOpen(i: Int, vec: Vector[TrieArray]): Rep[Unit] = {
         if (i < vec.length) {
-          return vec(i).open
+          vec(i).open
         }
-        else
-          return unit()
       }
 
       def callUp(i: Int, vec: Vector[TrieArray]): Rep[Unit] = {
         if (i < vec.length) {
-          return vec(i).up
+          vec(i).up
         }
-        else
-          return unit()
       }
 
       def callSeek(i: Int, x: Rep[String], vec: Vector[TrieArray]): Rep[Unit] = {
         if (i < vec.length) {
-          return vec(i).seek(x)
+          println("seek: " + x)
+          vec(i).seek(x)
         }
-        else
-          return unit()
+        else println("no seek!")
       }
 
     /**
@@ -383,28 +377,45 @@ object query_staged {
       def next: Rep[Unit] = currPos(currLv) = currPos(currLv) + 1
       def atEnd: Rep[Boolean] = {
         if (currPos(currLv) == len(currLv)) true
-        else if (currLv != 0 && currPos(currLv) == access[Int](currLv) {i => getIndex(i, currPos(i), index)}) true
+        else if (currLv != 0 && currPos(currLv) == access[Int](currLv - 1) {i => getIndex(i, currPos(i) + 1, index)}) true
         else false
       }
       def seek(seekKey: Rep[String]): Rep[Unit] = {
+        println("seek!")
+        var start = 0
+        var end = 0
         //put currPos onto correct position where key is the first key which >= seekKey
-        val start = access[Int](currLv){i => getIndex(i - 1, currPos(i - 1), index)}
-        val end = access[Int](currLv){i => getIndex(i - 1, currPos(i - 1) + 1, index)}
-        binSearch(seekKey, start, end)
-        /**
-          Helper function
-          */
-        def binSearch(seekKey: Rep[String], start: Rep[Int], end: Rep[Int]): Rep[Unit] = {
-          if (start == end) currPos(currLv) = start
-          else {
-            val pivot = access[String](currLv){i => getElem(i, (start + end) / 2, value)}
-            if (pivot <= seekKey) binSearch(seekKey, (start + end) / 2 + 1, end)
-            else binSearch(seekKey, start, (start + end) / 2)
-          }
+        if (currLv == 0) {
+          start = 0
+          end = len(0)
         }
+        else {
+          start = access[Int](currLv - 1){i => getIndex(i, currPos(i), index)}
+          end = access[Int](currLv - 1){i => getIndex(i, currPos(i) + 1, index)}
+        }
+        println("currLv = " + currLv + " seekKey = " + seekKey + " start = " + start + " end = " + end)
+        binSearch(seekKey, start, end)
       }
+
       def open: Rep[Unit] = {currPos(currLv + 1) = access[Int](currLv){i => getIndex(i, currPos(i), index)}; currLv += 1}
       def up: Rep[Unit] = currLv -= 1
+
+      /**
+          Helper function
+          */
+      def binSearch(seekKey: Rep[String], start: Rep[Int], end: Rep[Int]): Rep[Unit] = {
+        //Do we support recursion??? check tiark's tutorial
+        var vstart = start
+        var vend = end
+        while(vstart != vend) {
+          val pivot = access[String](currLv){i => getElem(i, (vstart + vend) / 2, value)}
+          if (pivot == seekKey) {vstart = (vstart + vend) / 2; vend = vstart; println("start = " + vstart + " end = " + vend)}
+          else if (pivot < seekKey) {vstart = (vstart + vend) / 2 + 1; println("start = " + vstart + " end = " + vend)}
+          else {vend = (vstart + vend) / 2; println("start = " + vstart + " end = " + vend)}
+        }
+        println("start = " + vstart + " end = " + vend)
+        currPos(currLv) = vstart
+      }
     }
     
 
@@ -559,64 +570,68 @@ object query_staged {
         println("init done!")
         //level starts from 0 and ends at -1
         while (currLv != -1) {
-          println(currLv)
+          println(currLv + " " + key)
           if (atEnd(currLv)) {currLv -= 1; k -= 1; array foreach {a => 
-            if (a.hasCol(currLv)) a.up}}
+            if (a.hasCol(currLv)) a.up}; println("at end: level" + currLv);
+            if (currLv != -1) next
+          }
           else if (currLv != schemaOfResult.length - 1) {
+            println("open: level" + currLv)
             pushIntoRes(key)
             open
           } 
           else {
             /* don't forget to call NEXT */
+            println("find 1 rec, call next: level" + currLv)
             pushIntoRes(key)
             yld(makeRecord)
             k -= 1
             next
           } 
-          print()
+          print("")
         }
       }
 
-      def inc(): Rep[Int] = {p = (p + 1) % array.length; p}
+      def inc(): Rep[Unit] = {p = (p + 1) % array.length; println("p = " + p + " length = " + array.length)}
       
-      def next: Rep[Int] = {
+      def next: Rep[Unit] = {
         access[Unit](p){i => callNext(i, arr_sorted)}
-        if (access[Boolean](p){i => callAtEnd(i, arr_sorted)})
-          return 0;
-        else {
+        if (false == access[Boolean](p){i => callAtEnd(i, arr_sorted)}) {
           inc
           search
         }        
       }
-      def seek(seekKey: Rep[String]): Rep[Int] = {
+      def seek(seekKey: Rep[String]): Rep[Unit] = {
         access[Unit](p){i => callSeek(i, seekKey, arr_sorted)}
-        if (access[Boolean](p){i => callAtEnd(i, arr_sorted)}) return 0;
-        else {
+        if (false == access[Boolean](p){i => callAtEnd(i, arr_sorted)}) {
           inc
           search
         }
       }
-      def search: Rep[Int] = {
-        var x = access[String](p){i => callKey(i, arr_sorted)}
+      //Don't use return/break/continue!!! use while(condition statement do all staff) {empty statement} to replace do...while() 
+      def search: Rep[Unit] = {
+        var x = access[String]((p - 1) % array.length){i => callKey(i, arr_sorted)}
         inc
-        while(true) {
+        println("p = " + p + "key = " + x)
+        var flag = true
+        while({
           var y = access[String](p){i => callKey(i, arr_sorted)}
-          if (x == y) return 0;
+          println("p = " + p + "key = " + x + "Boolean = " + (x == y))
+          if (x == y) {flag = false}
           else {
             access[Unit](p){i => callSeek(i, x, arr_sorted)}
-            if (access[Boolean](p){i => callAtEnd(i, arr_sorted)}) return 0;
+            if (access[Boolean](p){i => callAtEnd(i, arr_sorted)}) {flag = false}
             else {
               x = access[String](p){i => callKey(i, arr_sorted)}
               inc
+              flag = true
             }
           }
-          print()
-        }
-        return 0;
+          flag
+        }){ }
       }
-      def init: Rep[Int] = {
-        if (atEnd(currLv)) return 0;
-        else {
+      def init: Rep[Unit] = {
+        if (!atEnd(currLv)) {
           sort
           p = 0
           search
@@ -624,9 +639,9 @@ object query_staged {
       }
     
       def key: Rep[String] = arr_sorted(0).key
-      def atEnd(lv: Rep[Int]): Rep[Boolean] = array.foldLeft(unit(false))((a, x) => a || x.hasCol(lv) && x.atEnd)
+      def atEnd(lv: Rep[Int]): Rep[Boolean] = array.foldLeft(unit(false))((a, x) => a || (x.hasCol(lv) && x.atEnd))
 
-      def open: Rep[Int] = {
+      def open: Rep[Unit] = {
         currLv += 1
         p = 0
         while(p < k) {
@@ -635,7 +650,7 @@ object query_staged {
         }
         init
       }
-      def up: Rep[Int] = {
+      def up: Rep[Unit] = {
         p = 0
         while(p < k) {
           access[Unit](p){i => callUp(i, arr_sorted)}
@@ -663,3 +678,6 @@ object query_staged {
     }
   }
 }
+
+//Compilation error: write to non-mutable Sym(1151) -> Some(TP(Sym(1151),Reflect(ReadVar(Variable(Sym(245))),Summary(false,false,false,false,false,false,List(Sym(245), Sym(244)),List(Sym(245), Sym(244)),List(),List()),List())))
+

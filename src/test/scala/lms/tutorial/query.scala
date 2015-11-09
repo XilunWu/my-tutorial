@@ -266,7 +266,8 @@ trait Engine extends QueryProcessor with SQLParser {
   //Modify run func to execute designated AST
   //def run: Unit = execQuery(PrintCSV(parseSql(query)))
   val scan_t1gram = Scan("?",Some(Schema("Phrase", "Year", "MatchCount", "VolumeCount")),Some('\t'))
-  def run: Unit = execQuery(PrintCSV(LFTJoin(List(scan_t1gram))))
+
+  def run: Unit = execQuery(PrintCSV(LFTJoin(List(scan_t1gram, scan_t1gram))))
   //def run: Unit = execQuery(PrintCSV(scan_t1gram))
 
   override def dynamicFilePath(table: String): Table =
