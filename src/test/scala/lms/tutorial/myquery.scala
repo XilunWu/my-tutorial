@@ -1,67 +1,11 @@
 /**
-A SQL Query Compiler
-====================
-
-Commercial and open source database systems consist of millions of lines of highly 
-optimized C code. Yet, their performance on individual queries falls 10x or 100x 
-short of what a hand-written, specialized, implementation of the same query can 
-achieve.
-
-In this tutorial, we will build a small SQL processing engine that consists of 
-just about 500 lines of high-level Scala code. Whereas other systems interpret query 
-plans, operator by operator, we will use LMS to generate and compile low-level C 
-code for entire queries.
-
-We keep the query functionality intentionally simple. A more complete engine
-that handles the full TPCH benchmark suite and consists of about 3000 lines of
-code has been developed in the [LegoBase](http://data.epfl.ch/legobase) project, which recently received
-a best paper award at VLDB'14.
-
-See also:
-
-- Building Efficient Query Engines in a High-Level Language ([PDF](http://infoscience.epfl.ch/record/198693/files/801-klonatos.pdf))
-  Yannis Klonatos, Christoph Koch, Tiark Rompf, Hassan Chafi. VLDB'14
-- Functional pearl: A SQL to C Compiler in 500 Lines of Code ([PDF](https://www.cs.purdue.edu/homes/rompf/papers/rompf-icfp15.pdf))
-  Tiark Rompf, Nada Amin. ICFP'15
-
-Outline:
-<div id="tableofcontents"></div>
-
-
-Setting the Stage
------------------
-
-Let us run a few quick benchmarks to get an idea of the relative performance of different
-data processing systems. We take a data sample from [the Google Books NGram Viewer](https://books.google.com/ngrams) project.
-The 2GB file that contains statistics for words starting with the letter 'A' is a good candidate to run
-some simple queries. We might be interested in all occurrences of the word 'Auswanderung':
-
-    select * from 1gram_a where n_gram = 'Auswanderung'
-
-Here are some timings:
-
-- Loading the CSV file into a MySQL database takes > 5 minutes, running the query about 50 seconds.
-
-- PostgreSQL takes 3 minutes to load, the first query run takes 46 seconds, but subsequent runs get faster over time (down to 7 seconds).
-
-- An [AWK script](https://github.com/scala-lms/tutorials/blob/master/src/out/query_t1gram2.hand.awk) that processes the CSV file directly takes 45 seconds.
-
-- A [query interpreter](https://github.com/scala-lms/tutorials/blob/master/src/test/scala/lms/tutorial/query_unstaged.scala) written in Scala takes 39 sec.
-
-- A hand-written specialized [Scala program](https://github.com/scala-lms/tutorials/blob/master/src/out/query_t1gram2.hand0.scala/) takes 13 sec.
-
-- A similar hand-written [C program](https://github.com/scala-lms/tutorials/blob/master/src/out/query_t1gram2.hand.c/) performs marginally faster,
-  but with [more optimizations](https://github.com/scala-lms/tutorials/blob/master/src/out/query_t1gram2.hand2.c/) we can get as good as 3.2 seconds.
-
-The query processor we will develop in this tutorial matches the performance of the handwritten Scala and C queries (13s and 3s, respectively).
-
-More details on running the benchmarks are available [here](https://github.com/scala-lms/tutorials/blob/master/src/data/README.md). We now turn to our actual implementation.
-
+  my unit test file for lftj
 */
 
 package scala.lms.tutorial
 
-import scala.lms.common._
+import scala.virtualization.lms.common._
+import org.scalatest.FunSuite
 
 /**
 Relational Algebra AST
@@ -83,6 +27,7 @@ trait QueryAST {
   case class Join(parent1: Operator, parent2: Operator) extends Operator
   case class Group(keys: Schema, agg: Schema, parent: Operator) extends Operator
   case class HashJoin(parent1: Operator, parent2: Operator) extends Operator
+  case class LFTJoin(parents: List[Operator]) extends Operator
 
   // filter predicates
   sealed abstract class Predicate
@@ -263,7 +208,15 @@ trait Engine extends QueryProcessor with SQLParser {
   def liftTable(n: String): Table
   def eval: Unit
   def prepare: Unit = {}
-  def run: Unit = execQuery(PrintCSV(parseSql(query)))
+  //Modify run func to execute designated AST
+  //def run: Unit = execQuery(PrintCSV(parseSql(query)))
+  val scan_t1gram = Scan("?",Some(Schema("Phrase", "Year", "MatchCount", "VolumeCount")),Some('\t'))
+  val t1gram2 = Filter(Eq(Field("Phrase"), Value("Autoloading")), scan_t1gram)
+
+  //def run: Unit = execQuery(PrintCSV(LFTJoin(List(t1gram2, scan_t1gram))))
+  def run: Unit = execQuery(PrintCSV(LFTJoin(List(scan_t1gram, scan_t1gram))))
+  //def run: Unit = execQuery(PrintCSV(scan_t1gram))
+
   override def dynamicFilePath(table: String): Table =
     liftTable(if (table == "?") filename else filePath(table))
   def evalString = {
@@ -314,6 +267,7 @@ object Run {
     }
 
   def main(args: Array[String]) {
+    /*
     if (args.length < 2) {
       println("syntax:")
       println("   test:run (unstaged|scala|c) sql [file]")
@@ -333,7 +287,32 @@ object Run {
     qu = args(1)
     if (args.length > 2)
       fn = args(2)
+      */
 
+    if (args.length < 1) {
+      println("syntax:")
+      println("   test:run (unstaged|scala|c) sql [file]")
+      println()
+      println("example usage:")
+      println("   test:run c \"select * from ? schema Phrase, Year, MatchCount, VolumeCount delim \\t where Phrase='Auswanderung'\" src/data/t1gram.csv")
+      return
+    }
+    val version = args(0)
+    //Why fn must be put before engine? Because of dynamic FilePath???
+    fn = "src/data/t1gram.csv"
+
+    val engine = version match {
+      case "c" => c_engine
+      case "scala" => scala_engine
+      case "unstaged" => unstaged_engine
+      case _ => println("warning: unexpected engine, using 'unstaged' by default")
+        unstaged_engine
+    }
+    /*
+    qu = args(1)
+    if (args.length > 2)
+      fn = args(2)
+      */
     try {
       engine.prepare
       utils.time(engine.eval)
@@ -506,21 +485,14 @@ suggestions for interesting extensions.
   (Hint: the C version already does this, but is also more involved
   because of the custom type representations.)
 
-- (easy) Implement more predicates (e.g. `LessThan`) and predicate
+- Implement more predicates (e.g. `LessThan`) and predicate
   combinators (e.g. `And`, `Or`) in order to run more interesting
   queries.
 
 - (medium) Implement a real column-oriented database, where each column has its
   own file so that it can be read independently.
 
-- (hard) Implement an optimizer on the relational algebra before generating code.
+- Implement an optimizer on the relational algebra before generating code.
   (Hint: smart constructors might help.)
-
-  The query optimizer should rearrange query operator trees for a better join ordering, i.e. decide whether to execute joins on relations S0 x S1 x S2 as  (S0 x (S1 x S2)) vs ((S0 x S1) x S2).
-
-  Use a dynamic programming algorithm, that for n joins on tables S0 x S1 x ...x Sn tries to find an optimal solution for S1 x .. x Sn first, and then the optimal combination with S0. 
-
-  To find an optimal combination, try all alternatives and estimate the cost of each. Cost can be measured roughly as number of records processed. As a simple approximation, you can use the size of each input table and assume that all filter predicates match uniformly with probability 0.5.
-
 
 */

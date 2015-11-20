@@ -21,9 +21,9 @@ object query_staged {
         else if (i == 1) f(1)
         else if (i == 2) f(2)
         else if (i == 3) f(3)
-        else f(3)
+        //else if (i == 4) f(3)
+        else f(0)
         /*
-        else if (i == 4) f(4)
         else if (i == 5) f(5)
         else if (i == 6) f(6)
         else if (i == 7) f(7)
@@ -34,8 +34,7 @@ object query_staged {
         else if (i == 12) f(12)
         else if (i == 13) f(13)
         else if (i == 14) f(14)
-        else f(15)
-        */
+        else f(15)*/
       }
 
       def getIndex(i: Int, j: Rep[Int], vec: Vector[Rep[Array[Int]]]): Rep[Int] = {
@@ -558,7 +557,6 @@ object query_staged {
     class LFTJoinAlgo {
       var schemaOfResult: Schema = null
       var array: Vector[TrieArray] = null
-      var arr_sorted: Vector[TrieArray] = null
       var currLv = 0
       var k = 0
       var p = 0
@@ -601,15 +599,15 @@ object query_staged {
       def inc(): Rep[Unit] = {p = (p + 1) % array.length; println("p = " + p + " length = " + array.length)}
       
       def next: Rep[Unit] = {
-        access[Unit](p){i => callNext(i, arr_sorted)}
-        if (false == access[Boolean](p){i => callAtEnd(i, arr_sorted)}) {
+        access[Unit](p){i => callNext(i, array)}
+        if (false == access[Boolean](p){i => callAtEnd(i, array)}) {
           inc
           search
         }        
       }
       def seek(seekKey: Rep[String]): Rep[Unit] = {
-        access[Unit](p){i => callSeek(i, seekKey, arr_sorted)}
-        if (false == access[Boolean](p){i => callAtEnd(i, arr_sorted)}) {
+        access[Unit](p){i => callSeek(i, seekKey, array)}
+        if (false == access[Boolean](p){i => callAtEnd(i, array)}) {
           inc
           search
         }
@@ -619,19 +617,19 @@ object query_staged {
         var maxp = 0
         if (p == 0) maxp = array.length - 1
         else maxp = (p - 1) % array.length
-        var x = access[String](maxp){i => callKey(i, arr_sorted)}
+        var x = access[String](maxp){i => callKey(i, array)}
         //inc
         println("p = " + maxp + " key = " + x)
         var flag = true
         while({
-          var y = access[String](p){i => callKey(i, arr_sorted)}
+          var y = access[String](p){i => callKey(i, array)}
           println("p = " + p + " key = " + y + " Boolean = " + (x == y))
           if (x == y) {flag = false}
           else {
-            access[Unit](p){i => callSeek(i, x, arr_sorted)}
-            if (access[Boolean](p){i => callAtEnd(i, arr_sorted)}) {flag = false}
+            access[Unit](p){i => callSeek(i, x, array)}
+            if (access[Boolean](p){i => callAtEnd(i, array)}) {flag = false}
             else {
-              x = access[String](p){i => callKey(i, arr_sorted)}
+              x = access[String](p){i => callKey(i, array)}
               inc
               flag = true
             }
@@ -648,14 +646,14 @@ object query_staged {
         }
       }
     
-      def key: Rep[String] = arr_sorted(0).key
+      def key: Rep[String] = array(0).key
       def atEnd(lv: Rep[Int]): Rep[Boolean] = array.foldLeft(unit(false))((a, x) => a || (x.hasCol(lv) && x.atEnd))
 
       def open: Rep[Unit] = {
         currLv += 1
         var i = 0
         while(i < array.length) {
-          access[Unit](i){i => callOpen(i, arr_sorted)}
+          access[Unit](i){i => callOpen(i, array)}
           i += 1
         }
         init
@@ -663,16 +661,14 @@ object query_staged {
       def up: Rep[Unit] = {
         var i = 0
         while(i < array.length) {
-          access[Unit](i){i => callUp(i, arr_sorted)}
+          access[Unit](i){i => callUp(i, array)}
           i += 1
         }
         currLv -= 1
         init
       }
       def sort: Rep[Unit] = {
-        //set arr_sorted
-        //For test. 
-        arr_sorted = array
+        //set the cursor of each relation to the 1st common element
       }
 
       def makeRecord: Record = {
