@@ -66,20 +66,12 @@ object query_unstaged {
       case Join(left, right)       => resultSchema(left) ++ resultSchema(right)
       case Group(keys, agg, parent)=> keys ++ agg
       case HashJoin(left, right)   => resultSchema(left) ++ resultSchema(right)
-        /*
+        
       case LFTJoin(parents)        =>
-	val schema = ArrayBuffer[String]()
-	val hs = HashSet[String]()
-        parents foreach {
-	  resultSchema(_) foreach { vname =>
-	    if (!hs.contains(vname)) {
-	      hs += vname
-  	      schema += vname
-	    }
-	  }
-	}
-        schema.toVector
-         */
+      	val schema = new ArrayBuffer[String]()
+        parents foreach {p => schema ++= resultSchema(p)}
+        schema.toVector.distinct    //no repeated attributes
+        
       case PrintCSV(parent)        => Schema()
     }
 
@@ -122,7 +114,7 @@ object query_unstaged {
 	    }}
 	  }
 	}
-        /*
+
       case LFTJoin(parents) =>
 	val RRecords = ArrayBuffer[ArrayBuffer[Record]]()
         val RVar = ArrayBuffer[Schema]()
@@ -135,7 +127,7 @@ object query_unstaged {
 	}
 	val triejoin = new lftJoin.TrieJoin(RRecords, RVar)
 	utils.time(triejoin.run(yld))
-         */
+
       case PrintCSV(parent) =>
 	val schema = resultSchema(parent)
 	printSchema(schema)

@@ -61,7 +61,7 @@ More details on running the benchmarks are available [here](https://github.com/s
 
 package scala.lms.tutorial
 
-import scala.lms.common._
+import scala.virtualization.lms.common._
 
 /**
 Relational Algebra AST
@@ -83,6 +83,7 @@ trait QueryAST {
   case class Join(parent1: Operator, parent2: Operator) extends Operator
   case class Group(keys: Schema, agg: Schema, parent: Operator) extends Operator
   case class HashJoin(parent1: Operator, parent2: Operator) extends Operator
+  case class LFTJoin(parents: List[Operator]) extends Operator
 
   // filter predicates
   sealed abstract class Predicate
@@ -263,6 +264,7 @@ trait Engine extends QueryProcessor with SQLParser {
   def liftTable(n: String): Table
   def eval: Unit
   def prepare: Unit = {}
+  //override run method. Overlook the parse process
   def run: Unit = execQuery(PrintCSV(parseSql(query)))
   override def dynamicFilePath(table: String): Table =
     liftTable(if (table == "?") filename else filePath(table))
@@ -299,6 +301,19 @@ object Run {
         val IR: q.type = q
       }
       override def snippet(fn: Table): Rep[Unit] = run
+      /**
+        * utils.scala
+        *   def precompile: Unit = f
+        *   def eval(x: A): B = f(x)
+       **/
+      /* 
+      dump code: 
+      lazy val code: String = {
+        val source = new java.io.StringWriter()
+        codegen.emitSource(snippet, "Snippet", new java.io.PrintWriter(source))
+        source.toString
+      }
+      */
       override def prepare: Unit = precompile
       override def eval: Unit = eval(filename)
     }
