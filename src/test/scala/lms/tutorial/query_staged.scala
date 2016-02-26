@@ -21,7 +21,7 @@ object query_staged {
       else if (i == 1) f(1)
       else if (i == 2) f(2)
       else if (i == 3) f(3)
-      else if (i == 4) f(4)
+//      else if (i == 4) f(4)
       else f(0)
     }
     def getValue(buf: Vector[Rep[Array[String]]], i: Rep[Int], j: Rep[Int]): Rep[String] = access[String](i){i =>
@@ -44,55 +44,13 @@ object query_staged {
       if (i < buf.length)
         buf(i)(j) = v
     }
-    
-    def callHasCol(i: Int, j:Rep[Int], vec: List[TrieArray]): Rep[Boolean] = {
-      if (i < vec.length) {
-        return vec(i).hasCol(j)
-      }
-      else
-        return unit(false)
+    def getArray[T:Manifest](buf: Vector[Rep[Array[T]]], i:Rep[Int]): Rep[Array[T]] = {
+      if (i == 0) buf(0)
+      else if (i == 1) buf(1)
+      else if (i == 2) buf(2)
+      else if (i == 3) buf(3)
+      else buf(0)
     }
-
-    def callKey(i: Int, vec: List[TrieArray]): Rep[String] = {
-      if (i < vec.length) {
-        return vec(i).key
-      }
-      else
-        return unit("")
-    }
-
-    def callNext(i: Int, vec: List[TrieArray]): Rep[Unit] = {
-      if (i < vec.length) {
-        return vec(i).next
-      }
-    }
-
-    def callAtEnd(i: Int, vec: List[TrieArray]): Rep[Boolean] = {
-      if (i < vec.length) {
-        return vec(i).atEnd
-      }
-      else
-        return true
-    }
-
-    def callOpen(i: Int, vec: List[TrieArray]): Rep[Unit] = {
-      if (i < vec.length) {
-        vec(i).open
-      }
-    }
-
-    def callUp(i: Int, vec: List[TrieArray]): Rep[Unit] = {
-      if (i < vec.length) {
-        vec(i).up
-      }
-    }
-
-    def callSeek(i: Int, x: Rep[String], vec: List[TrieArray]): Rep[Unit] = {
-      if (i < vec.length) {
-        vec(i).seek(x)
-      }
-    }
-
     /**
       Low-Level Processing Logic
       --------------------------
@@ -197,11 +155,11 @@ object query_staged {
 
         val schemaOfResult = resultSchema(LFTJoin(parents))
         val trieArrays = parents.map { p =>
-          val buf = new TrieArray(1 << 16, resultSchema(p), schemaOfResult)
+          val buf = new TrieArray(1 << 24/*16*/, resultSchema(p), schemaOfResult)
           execOp(p) {rec => buf += rec.fields}
           buf
         }
-//        trieArrays foreach {arr => arr.output}
+        //        trieArrays foreach {arr => arr.output}
         trieArrays foreach {arr => arr.toTrieArray}
         val join = new LFTJmain(trieArrays, schemaOfResult)
         join.run(yld)
@@ -217,7 +175,6 @@ object query_staged {
       Data Structure Implementations
       ------------------------------
       */
-
     class TrieArray (dataSize: Int, schema: Schema, schemaOfResult: Schema) {
       var len = 0
       val buf = schema.map(f => NewArray[String](dataSize))
@@ -267,29 +224,47 @@ object query_staged {
         while(i < len) {
           diff = false
           while (j < schema.length) {
-            if (diff || lastRecord(j) != getValue(buf, j, i)) {
-              updateValue(valueArray, j, next(j), getValue(buf, j, i))
+            access[Unit](j){j =>
+              val curr_value = buf(j)(i)
+              if (diff || lastRecord(j) != curr_value) {
+                valueArray(j)(next(j)) = curr_value
+                if (j != schema.length - 1)
+                  indexArray(j)(next(j)) = next(j + 1)
+                lastRecord(j) = curr_value
+                next(j) = next(j) + 1
+                diff = true
+              }
+            }
+            /*
+            val curr_value = getValue(buf, j, i)
+            if (diff || lastRecord(j) != curr_value) {
+              updateValue(valueArray, j, next(j), curr_value)
               if (j != schema.length - 1)   //no index for last attribute
                 updateIndex(indexArray, j, next(j), next(j + 1))
-              lastRecord(j) = getValue(buf, j, i)
+              lastRecord(j) = curr_value
               next(j) = next(j) + 1
               diff = true
             }
-            /*print(getValue(valueArray, j, next(j) - 1) + " "); print(getIndex(indexArray, j, next(j) - 1) + " ")*/
+            */
             j += 1
           }
-//          print('\n')
+          //          print('\n')
           i += 1
           j = 0
         }
         //for the last row
         while (j < schema.length - 1){
+          /*
+            How to return an array which can be modified?
+          */
+          //val index = getArray[Int](indexArray, j)
+          //index(next(j)) = next(j + 1)
           updateIndex(indexArray, j, next(j), next(j + 1))
           lenArray(j) = next(j)
           j += 1
         }
-//        flagTable foreach {t => print(t + " ")}; print('\n')
-            //done generating TrieArray
+        //        flagTable foreach {t => print(t + " ")}; print('\n')
+        //done generating TrieArray
       }
       val cursor = NewArray[Int](schema.length)
       var currLv = 0
@@ -302,7 +277,7 @@ object query_staged {
         else if (currLv != 0 && cursor(currLv) == getIndex(indexArray, currLv - 1, cursor(currLv - 1) + 1)) true
         else false
       }
-      def seek(seekKey: Rep[String]): Rep[Unit] = {   //find the first of repetitions 
+      def seek(seekKey: Rep[String]): Rep[Unit] = {   //find the first of repetitions
         val start = if (currLv == 0) 0 else getIndex(indexArray, currLv - 1, cursor(currLv - 1))
         val end = if (currLv == 0) lenArray(0) else getIndex(indexArray, currLv - 1, cursor(currLv - 1) + 1)
         bsearch(seekKey, start, end)
@@ -314,10 +289,10 @@ object query_staged {
       def up: Rep[Unit] = currLv -= 1
 
       def bsearch(seekKey: Rep[String], start: Rep[Int], end: Rep[Int]): Rep[Unit] = {
-        //Do we support recursion??? check tiark's tutorial
         var vstart = start
         var vend = end
         while(vstart != vend) {
+          //Shall we transform it into access[Unit](){func}? This introduce more code. 
           val pivot = getValue(valueArray, currLv, (vstart + vend) / 2)
           if (pivot == seekKey) {vstart = (vstart + vend) / 2; vend = vstart}
           else if (pivot < seekKey) {vstart = (vstart + vend) / 2 + 1}
@@ -457,129 +432,87 @@ object query_staged {
 
     class LFTJmain (rels : List[TrieArray], schema: Schema){
       var currLv = 0
-      var p = 0
+      //var p = 0
       val res = NewArray[String](schema.length)
       var k = 0  //res
       def run(yld: Record => Rep[Unit]) = {
         while (currLv != -1) {
-          if (atEnd(currLv)) {
+          if (atEnd) {//2000lines in this branch
             k -= 1
             up
-            if (currLv != -1) next
+            if (currLv != -1) next  
           }
           else if (currLv != schema.length - 1) {
             pushIntoRes(key)
             open
-          } 
+          }
           else {
             /* don't forget to call NEXT */
             pushIntoRes(key)
             yld(makeRecord)
             k -= 1
             next
-          } 
+          }
         }
-      }
-
-      def inc(): Rep[Unit] = {
-        //if no loop in while condition? the same code volume
-        while ({
-          p = (p + 1) % rels.length
-          access[Boolean](p){i => callHasCol(i, currLv, rels)} == false
-          }){}
       }
       //check atEnd after calling next()
-      def next: Rep[Unit] = { 
-        access[Unit](p){i => callNext(i, rels)}
-//        println(key)
-        if (access[Boolean](p){i => callAtEnd(i, rels)} == false) {
-          inc
-          search
-//          println("after search: " + key)
-        }
-      }
-      //check atEnd after calling seek()
-      def seek(seekKey: Rep[String]): Rep[Unit] = {
-        access[Unit](p){i => callSeek(i, seekKey, rels)}
-        if (false == access[Boolean](p){i => callAtEnd(i, rels)}) {
-          inc
+      def next: Rep[Unit] = {
+        //call iterator.next for every iterator in vector
+        rels foreach {r => if(r.hasCol(currLv)) r.next}
+        if(atEnd == false) {
           search
         }
       }
       def search: Rep[Unit] = {
-        var maxp = p
-        //check if atEnd pls!!!
-        while ({
-          if (maxp == 0) maxp = rels.length - 1
-          else maxp = (maxp - 1) % rels.length
-          access[Boolean](maxp){i => callHasCol(i, currLv, rels)} == false
-          }){}
-        var x = access[String](maxp){i => callKey(i, rels)}
-        var flag = true
+        //find the max key
+        var maxkey = ""
+        var minkey = ""
         while({
-          var y = access[String](p){i => callKey(i, rels)}
-          if (x == y) {flag = false}
+          var flag = atEnd
+          if (flag == true) {false} 
           else {
-            access[Unit](p){i => callSeek(i, x, rels)}
-            //access[Unit](p){i => callNext(i, rels)}
-            if (access[Boolean](p){i => callAtEnd(i, rels)}) {flag = false}
-            else {
-              x = access[String](p){i => callKey(i, rels)}
-              inc
-              flag = true
+            maxkey = ""
+            var tmp = ""
+            rels foreach {r =>
+              if (r.hasCol(currLv)) {
+                tmp = r.key
+                if (tmp > maxkey) maxkey = tmp
+              }
+            }
+            minkey = maxkey
+            rels foreach {r =>
+              if (r.hasCol(currLv)) {
+                tmp = r.key
+                if (tmp < minkey) minkey = tmp
+              }
             }
           }
-          flag
-        }){}
-      }
-      def init: Rep[Unit] = { //find the largest element and put p as the next relation -- search gets corrct maxp 
-         if (!atEnd(currLv)) {
-          p = rels.length - 1
-          inc
-          var start = p
-          var maxp = p
-          var maxv = access[String](p){i => callKey(i, rels)}
-          inc
-          while (p > start) {
-            val tmp = access[String](p){i => callKey(i, rels)}
-            if(maxv < tmp) {
-              maxp = p
-              maxv = tmp
-            }
-            inc
-          }
-          p = maxp
-          inc
-          search
+          maxkey != minkey
+        }) {
+          rels foreach {r => if(r.hasCol(currLv)) r.seek(maxkey)}
         }
       }
-      def key: Rep[String] = access[String](p){i => callKey(i, rels)}
-      def atEnd(lv: Rep[Int]): Rep[Boolean] = rels.foldLeft(unit(false))((a, x) => a || (x.hasCol(lv) && x.atEnd))      
-      //don't forget to relcoate p to any eligible relation in open/up. This can be done in init()
+      def init: Rep[Unit] = {
+        search
+      }
+      def key: Rep[String] = {
+        var key = ""
+        rels foreach {r =>
+          if (r.hasCol(currLv)) {
+            key = r.key
+          }
+        }
+        key
+      }
+      def atEnd(): Rep[Boolean] = rels.foldLeft(unit(false))((a, x) => a || (x.hasCol(currLv) && x.atEnd))
       def open: Rep[Unit] = {
-        //Must be Rep[Int]. Otherwise it can't generate code. Compilation is ok but no generated code
-        val start = p:Rep[Int]
-        access[Unit](p){i => callOpen(i, rels)}
-        inc
-        while(p != start) {
-          access[Unit](p){i => callOpen(i, rels)}
-//          println("p: " + p + ", " + start)
-          inc
-        }
+        rels foreach {r => if(r.hasCol(currLv)) r.open}
         currLv += 1
         init
       }
       def up: Rep[Unit] = {
-        //Must be Rep[Int]. Otherwise it can't generate code. Compilation is ok but no generated code
-        val start = p:Rep[Int]
-        access[Unit](p){i => callUp(i, rels)}
-        inc
-        while(p != start) {
-          access[Unit](p){i => callUp(i, rels)}
-          inc
-        }
+        rels foreach {r => if(r.hasCol(currLv)) r.up}        
         currLv -= 1
-        //init
       }
       def makeRecord: Record = {
         //Record(res, schemaOfResult)
@@ -591,140 +524,6 @@ object query_staged {
         res.update(k, key)
         k += 1
       }
-
     }
-
-    /*
-     class LFTJoinAlgo {
-     var schemaOfResult: Schema = null
-     var array: Vector[TrieArray] = null
-     var currLv = 0
-     var k = 0
-     var p = 0
-     var res = NewArray[String](0)
-
-     def load(array: Vector[TrieArray], schema: Schema): Rep[Unit] = {
-     println("load()")
-     schemaOfResult = schema
-     this.array = array
-     println(schemaOfResult.length)
-     res = NewArray[String](schemaOfResult.length)
-     }
-     def run(yld: Record => Rep[Unit]): Rep[Unit] = {
-     init
-     println("init done!")
-     //level starts from 0 and ends at -1
-     while (currLv != -1) {
-     println(currLv + " " + key)
-     if (atEnd(currLv)) {currLv -= 1; k -= 1; array foreach {a =>
-     if (a.hasCol(currLv)) a.up}; println("at end: level" + currLv);
-     if (currLv != -1) next
-     }
-     else if (currLv != schemaOfResult.length - 1) {
-     println("open: level" + currLv)
-     pushIntoRes(key)
-     open
-     }
-     else {
-     /* don't forget to call NEXT */
-     println("find 1 rec, call next: level" + currLv)
-     pushIntoRes(key)
-     yld(makeRecord)
-     k -= 1
-     next
-     }
-     print("")
-     }
-     }
-
-     def inc(): Rep[Unit] = {p = (p + 1) % array.length; println("p = " + p + " length = " + array.length)}
-     
-     def next: Rep[Unit] = {
-     access[Unit](p){i => callNext(i, array)}
-     if (false == access[Boolean](p){i => callAtEnd(i, array)}) {
-     inc
-     search
-     }
-     }
-     def seek(seekKey: Rep[String]): Rep[Unit] = {
-     access[Unit](p){i => callSeek(i, seekKey, array)}
-     if (false == access[Boolean](p){i => callAtEnd(i, array)}) {
-     inc
-     search
-     }
-     }
-     //Don't use return/break/continue!!! use while(condition statement do all staff) {empty statement} to replace do...while()
-     def search: Rep[Unit] = {
-     var maxp = 0
-     if (p == 0) maxp = array.length - 1
-     else maxp = (p - 1) % array.length
-     var x = access[String](maxp){i => callKey(i, array)}
-     //inc
-     println("p = " + maxp + " key = " + x)
-     var flag = true
-     while({
-     var y = access[String](p){i => callKey(i, array)}
-     println("p = " + p + " key = " + y + " Boolean = " + (x == y))
-     if (x == y) {flag = false}
-     else {
-     access[Unit](p){i => callSeek(i, x, array)}
-     if (access[Boolean](p){i => callAtEnd(i, array)}) {flag = false}
-     else {
-     x = access[String](p){i => callKey(i, array)}
-     inc
-     flag = true
-     }
-     }
-     flag
-     }){ }
-     }
-     def init: Rep[Unit] = {
-     if (!atEnd(currLv)) {
-     sort
-     //          arr_sorted foreach {a => a.output; print("\n")}
-     p = 0
-     search
-     }
-     }
-
-     def key: Rep[String] = array(0).key
-     def atEnd(lv: Rep[Int]): Rep[Boolean] = array.foldLeft(unit(false))((a, x) => a || (x.hasCol(lv) && x.atEnd))
-
-     def open: Rep[Unit] = {
-     currLv += 1
-     var i = 0
-     while(i < array.length) {
-     access[Unit](i){i => callOpen(i, array)}
-     i += 1
-     }
-     init
-     }
-     def up: Rep[Unit] = {
-     var i = 0
-     while(i < array.length) {
-     access[Unit](i){i => callUp(i, array)}
-     i += 1
-     }
-     currLv -= 1
-     init
-     }
-     def sort: Rep[Unit] = {
-     //set the cursor of each relation to the 1st common element
-     }
-
-     def makeRecord: Record = {
-     //Record(res, schemaOfResult)
-     var i = -1;
-     val key = schemaOfResult.map{x => {i += 1; res(i)}}
-     Record(key, schemaOfResult)
-     }
-     def pushIntoRes(key: Rep[String]) = {
-     res.update(k, key)
-     k += 1
-     }
-     }*/
   }
 }
-
-//Compilation error: write to non-mutable Sym(1151) -> Some(TP(Sym(1151),Reflect(ReadVar(Variable(Sym(245))),Summary(false,false,false,false,false,false,List(Sym(245), Sym(244)),List(Sym(245), Sym(244)),List(),List()),List())))
-

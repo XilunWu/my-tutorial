@@ -64,7 +64,7 @@ class LFTjoinQueryTest extends TutorialFunSuite {
           assert(expectedParsedQuery==parsedQuery)
         }
 //comment for develop. uncomment after it. 
-        check(name, code)
+        //check(name, code)
         precompile
         checkOut(name, "csv", eval(defaultEvalTable))
       }
@@ -105,19 +105,25 @@ class LFTjoinQueryTest extends TutorialFunSuite {
 
   trait ExpectedASTs extends QueryAST {
     val scan_t = Scan("t.csv")
+    val scan_1gram = Scan("1gram.csv",Some(Schema("Phrase", "Year", "MatchCount", "VolumeCount")),Some('\t'))
     val scan_t1gram = Scan("t1gram.csv",Some(Schema("Phrase", "Year", "MatchCount", "VolumeCount")),Some('\t'))
 
     val expectedAstForTest = Map(
+      "1gram1" -> scan_1gram,
       "t1gram1" -> scan_t1gram,
-      "lftj_t1gram2" -> LFTJoin(List(scan_t1gram, scan_t1gram))
+      "lftj_t1gram1" -> LFTJoin(List(scan_t1gram, scan_t1gram)),
+      "lftj_1gram1" -> LFTJoin(List(scan_1gram, scan_1gram)),
+      "lftj_1gram2" -> LFTJoin(List(scan_1gram, Filter(Eq(Field("Phrase"), Value("Auswanderung")), scan_1gram)))
     )
   }
 
-  val defaultEvalTable = dataFilePath("t1gram.csv")
+  val defaultEvalTable = dataFilePath("1gram.csv")
   val t1gram = "? schema Phrase, Year, MatchCount, VolumeCount delim \\t"
 
 //  testquery("t1gram1", s"select * from $t1gram")
-  utils.time{testquery("lftj_t1gram2", "")}
+  //print("Total execution time: ")
+  utils.time(testquery("lftj_1gram1", ""))
+  //println()
 }
 
 

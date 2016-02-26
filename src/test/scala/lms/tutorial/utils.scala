@@ -9,7 +9,7 @@ trait LibSuite extends FunSuite {
 
 trait TutorialFunSuite extends LibSuite {
   //val overwriteCheckFiles = false // should be false; temporary set to true only to simplify development
-  val overwriteCheckFiles = false  // "true" for the first time
+  val overwriteCheckFiles = true  // "true" for the first time
 
   val prefix = "src/out/"
   val under: String
@@ -37,7 +37,8 @@ trait TutorialFunSuite extends LibSuite {
   def checkOut(label: String, suffix: String, thunk: => Unit) = {
     val output = new ByteArrayOutputStream()
     scala.Console.setOut(new PrintStream(output))
-    thunk
+    //utils.time{} here -- It outputs the runtime in file. Check it out.
+    utils.time(thunk)
     check(label, output.toString(), suffix = suffix)
   }
   def check(label: String, raw_code: String, suffix: String = "scala") = {
