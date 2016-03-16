@@ -57,7 +57,8 @@ Low-Level Processing Logic
     def compare(o: RField): Rep[Boolean]
     def hash: Rep[Long]
   }
-  case class RString(data: Rep[String], len: Rep[Int]) extends RField {
+  //make data visilble outside RString.
+  case class RString(val data: Rep[String], len: Rep[Int]) extends RField {
     def print() = prints(data)
     def compare(o: RField) = o match { case RString(data2, len2) => if (len != len2) false else {
       // TODO: we may or may not want to inline this (code bloat and icache considerations).
@@ -69,7 +70,8 @@ Low-Level Processing Logic
     }}
     def hash = data.HashCode(len)
   }
-  case class RInt(value: Rep[Int]) extends RField {
+  //make value visilble outside RInt.
+  case class RInt(val value: Rep[Int]) extends RField {
     def print() = printf("%d",value)
     def compare(o: RField) = o match { case RInt(v2) => value == v2 }
     def hash = value.asInstanceOf[Rep[Long]]
@@ -138,17 +140,10 @@ Query Interpretation = Compilation
     case Group(keys, agg, parent)=> keys ++ agg
     case HashJoin(left, right)   => resultSchema(left) ++ resultSchema(right)
     case PrintCSV(parent)        => Schema()
-    case LFTJoin(parents)        => val schema = scala.collection.mutable.ArrayBuffer[String]()
-        val hs = scala.collection.mutable.HashSet[String]()
-        parents foreach {
-          resultSchema(_) foreach { vname =>
-            if (!hs.contains(vname)) {
-              hs += vname
-              schema += vname
-            }
-          }
-        }
-        schema.toVector
+    case LFTJoin(parents)        =>
+        val schema = scala.collection.mutable.ArrayBuffer[String]()
+        parents foreach {p => schema ++= resultSchema(p)}
+        schema.toVector.distinct    //no repeated attributes
   }
 
   def execOp(o: Operator)(yld: Record => Rep[Unit]): Rep[Unit] = o match {

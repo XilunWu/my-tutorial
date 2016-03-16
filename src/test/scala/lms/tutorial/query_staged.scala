@@ -31,7 +31,9 @@ object query_staged {
         unit("")
     }
     def getIndex(buf: Vector[Rep[Array[Int]]], i: Rep[Int], j: Rep[Int]): Rep[Int] = access[Int](i){i =>
-      if (i < buf.length)
+      if (i < 0)
+        0
+      else if (i < buf.length)
         buf(i)(j)
       else
         unit(0)
@@ -44,6 +46,8 @@ object query_staged {
       if (i < buf.length)
         buf(i)(j) = v
     }
+    /*
+    ** The type of this function is inappropriate which causes confliction between (non)mutable objects.
     def getArray[T:Manifest](buf: Vector[Rep[Array[T]]], i:Rep[Int]): Rep[Array[T]] = {
       if (i == 0) buf(0)
       else if (i == 1) buf(1)
@@ -51,6 +55,7 @@ object query_staged {
       else if (i == 3) buf(3)
       else buf(0)
     }
+    */
     /**
       Low-Level Processing Logic
       --------------------------
@@ -333,7 +338,7 @@ object query_staged {
           }
           if (init.isDefined) {
             if (htable(pos) == -1) {
-              val keyPos = keyCount: Rep[Int] // force read
+              val keyPos = keyCount: Rep[Int] // force read. But seems that it doesn't affect code.
               keys(keyPos) = k
               keyCount += 1
               htable(pos) = keyPos

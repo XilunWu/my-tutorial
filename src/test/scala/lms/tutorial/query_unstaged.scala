@@ -111,10 +111,9 @@ object query_unstaged {
 	  execOp(right) { rec2 =>
 	    hm.get(rec2(keys)) foreach { _.foreach { rec1 =>
 	      yld(Record(rec1.fields ++ rec2.fields, rec1.schema ++ rec2.schema))
-	    }}
+	  	}}
 	  }
 	}
-
       case LFTJoin(parents) =>
 	val RRecords = ArrayBuffer[ArrayBuffer[Record]]()
         val RVar = ArrayBuffer[Schema]()
