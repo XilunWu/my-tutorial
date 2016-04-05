@@ -16,46 +16,41 @@ object query_staged {
     override def version = "query_staged"
 
     //method to access element in Vector using Rep[Int] as subscript
-    def access[T:Manifest](i: Rep[Int])(f: Int => Rep[T]): Rep[T] = {
-      if (i == 0) f(0)
-      else if (i == 1) f(1)
-      else if (i == 2) f(2)
-      else if (i == 3) f(3)
-//      else if (i == 4) f(4)
-      else f(0)
+    def access[T:Manifest](i: Rep[Int], len: Int)(f: Int => Rep[T]): Rep[T] = {
+      if(i >= len)
+        f(0)
+      else
+        accessHelp[T](i, len, 0)(f)
     }
-    def getValue(buf: Vector[Rep[Array[String]]], i: Rep[Int], j: Rep[Int]): Rep[String] = access[String](i){i =>
+    def accessHelp[T:Manifest](i: Rep[Int], len: Int, count: Int)(f: Int => Rep[T]): Rep[T] = {
+      if (i == count)
+        f(count)
+      else if (count < len - 1)
+        accessHelp[T](i, len, count + 1)(f)
+      else
+        f(len-1)
+    }
+    //the if-then-else branch in get/update function can be eliminated.
+    def getValue(buf: Vector[Rep[Array[String]]], i: Rep[Int], j: Rep[Int]): Rep[String] = access[String](i, buf.length){i =>
       if (i < buf.length)
         buf(i)(j)
       else
         unit("")
     }
-    def getIndex(buf: Vector[Rep[Array[Int]]], i: Rep[Int], j: Rep[Int]): Rep[Int] = access[Int](i){i =>
-      if (i < 0)
-        0
-      else if (i < buf.length)
+    def getIndex(buf: Vector[Rep[Array[Int]]], i: Rep[Int], j: Rep[Int]): Rep[Int] = access[Int](i, buf.length){i =>
+      if (i < buf.length)
         buf(i)(j)
       else
         unit(0)
     }
-    def updateValue(buf: Vector[Rep[Array[String]]], i: Rep[Int], j: Rep[Int], v: Rep[String]): Rep[Unit] = access[Unit](i){i =>
+    def updateValue(buf: Vector[Rep[Array[String]]], i: Rep[Int], j: Rep[Int], v: Rep[String]): Rep[Unit] = access[Unit](i, buf.length){i =>
       if (i < buf.length)
         buf(i)(j) = v
     }
-    def updateIndex(buf: Vector[Rep[Array[Int]]], i: Rep[Int], j: Rep[Int], v: Rep[Int]): Rep[Unit] = access[Unit](i){i =>
+    def updateIndex(buf: Vector[Rep[Array[Int]]], i: Rep[Int], j: Rep[Int], v: Rep[Int]): Rep[Unit] = access[Unit](i, buf.length){i =>
       if (i < buf.length)
         buf(i)(j) = v
     }
-    /*
-    ** The type of this function is inappropriate which causes confliction between (non)mutable objects.
-    def getArray[T:Manifest](buf: Vector[Rep[Array[T]]], i:Rep[Int]): Rep[Array[T]] = {
-      if (i == 0) buf(0)
-      else if (i == 1) buf(1)
-      else if (i == 2) buf(2)
-      else if (i == 3) buf(3)
-      else buf(0)
-    }
-    */
     /**
       Low-Level Processing Logic
       --------------------------
@@ -115,9 +110,15 @@ object query_staged {
       case PrintCSV(parent)        => Schema()
       //Only for test
       case LFTJoin(parents)        =>
+        //This is incorrect because it only guarantees the order or attributes within each table,
+        //but not among tables.
+        /*
         val schema = scala.collection.mutable.ArrayBuffer[String]()
         parents foreach {p => schema ++= resultSchema(p)}
         schema.toVector.distinct    //no repeated attributes
+        */ 
+        val schema = Schema("ORDERKEY","CUSTKEY","PARTKEY","SUPPKEY","NATIONKEY","REGIONKEY")
+        schema
     }
 
     def execOp(o: Operator)(yld: Record => Rep[Unit]): Rep[Unit] = o match {
@@ -160,7 +161,7 @@ object query_staged {
 
         val schemaOfResult = resultSchema(LFTJoin(parents))
         val trieArrays = parents.map { p =>
-          val buf = new TrieArray(1 << 24/*16*/, resultSchema(p), schemaOfResult)
+          val buf = new TrieArray(1 << 23/*16*/, resultSchema(p), schemaOfResult)
           execOp(p) {rec => buf += rec.fields}
           buf
         }
@@ -228,8 +229,9 @@ object query_staged {
         var diff = false
         while(i < len) {
           diff = false
+          //here. could refactor the code.
           while (j < schema.length) {
-            access[Unit](j){j =>
+            access[Unit](j, schema.length){j =>
               val curr_value = buf(j)(i)
               if (diff || lastRecord(j) != curr_value) {
                 valueArray(j)(next(j)) = curr_value
@@ -268,11 +270,14 @@ object query_staged {
           lenArray(j) = next(j)
           j += 1
         }
-        //        flagTable foreach {t => print(t + " ")}; print('\n')
+        lenArray(j) = next(j)
+        //j = 0
+        //println("After initialization: j = " + j)
+        //while (j < schema.length){println(lenArray(j)); j = j + 1; println("In loop: " + j)}
         //done generating TrieArray
       }
       val cursor = NewArray[Int](schema.length)
-      var currLv = 0
+      var currLv = -1
 
       def key: Rep[String] = {getValue(valueArray, currLv, cursor(currLv))}
       def next: Rep[Unit] ={cursor(currLv) = cursor(currLv) + 1}
@@ -283,17 +288,20 @@ object query_staged {
         else false
       }
       def seek(seekKey: Rep[String]): Rep[Unit] = {   //find the first of repetitions
-        val start = if (currLv == 0) 0 else getIndex(indexArray, currLv - 1, cursor(currLv - 1))
+        //println("searchKey = " + seekKey)
+        val start = cursor(currLv)
         val end = if (currLv == 0) lenArray(0) else getIndex(indexArray, currLv - 1, cursor(currLv - 1) + 1)
+        //println("start = " + start + ", end = " + end)
         bsearch(seekKey, start, end)
       }
       def open: Rep[Unit] = {
-        cursor(currLv + 1) = getIndex(indexArray, currLv, cursor(currLv))
         currLv += 1
+        cursor(currLv) = if(currLv == 0) 0 else getIndex(indexArray, currLv - 1, cursor(currLv - 1))
       }
       def up: Rep[Unit] = currLv -= 1
 
       def bsearch(seekKey: Rep[String], start: Rep[Int], end: Rep[Int]): Rep[Unit] = {
+        //println("start = " + start + ", end = " + end)
         var vstart = start
         var vend = end
         while(vstart != vend) {
@@ -436,37 +444,41 @@ object query_staged {
       */
 
     class LFTJmain (rels : List[TrieArray], schema: Schema){
-      var currLv = 0
+      var currLv = -1
       //var p = 0
       val res = NewArray[String](schema.length)
       var k = 0  //res
       def run(yld: Record => Rep[Unit]) = {
+        open
+        search
         while (currLv != -1) {
           if (atEnd) {//2000lines in this branch
+            //println("up")
+            //rels foreach {r => if(r.hasCol(currLv)) println("currlv = " + r.currLv + ", key = " + r.key + ", atEnd = " + r.atEnd)}
             k -= 1
             up
-            if (currLv != -1) next  
+            if (currLv != -1) next
           }
           else if (currLv != schema.length - 1) {
+            //println("open: key = " + key)
             pushIntoRes(key)
             open
           }
           else {
+            //println("find 1 record: key = " + key)
             /* don't forget to call NEXT */
             pushIntoRes(key)
             yld(makeRecord)
             k -= 1
             next
           }
+          if (currLv != -1 && !atEnd) search
         }
       }
       //check atEnd after calling next()
       def next: Rep[Unit] = {
         //call iterator.next for every iterator in vector
         rels foreach {r => if(r.hasCol(currLv)) r.next}
-        if(atEnd == false) {
-          search
-        }
       }
       def search: Rep[Unit] = {
         //find the max key
@@ -491,15 +503,17 @@ object query_staged {
                 if (tmp < minkey) minkey = tmp
               }
             }
+            maxkey != minkey
           }
-          maxkey != minkey
         }) {
           rels foreach {r => if(r.hasCol(currLv)) r.seek(maxkey)}
         }
+        //println("LV: " + currLv + ", key = " + maxkey)
       }
+      /*
       def init: Rep[Unit] = {
         search
-      }
+      }*/
       def key: Rep[String] = {
         var key = ""
         rels foreach {r =>
@@ -511,9 +525,8 @@ object query_staged {
       }
       def atEnd(): Rep[Boolean] = rels.foldLeft(unit(false))((a, x) => a || (x.hasCol(currLv) && x.atEnd))
       def open: Rep[Unit] = {
-        rels foreach {r => if(r.hasCol(currLv)) r.open}
         currLv += 1
-        init
+        rels foreach {r => if(r.hasCol(currLv)) r.open}
       }
       def up: Rep[Unit] = {
         rels foreach {r => if(r.hasCol(currLv)) r.up}        

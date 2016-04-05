@@ -55,7 +55,7 @@ class LFTjoinQueryTest extends TutorialFunSuite {
   abstract class ScalaStagedQueryDriver(val name: String, val query: String) extends DslDriver[String,Unit] with StagedTestDriver with StagedQueryProcessor with ScannerExp { q =>
     override val codegen = new DslGen with ScalaGenScanner {
       val IR: q.type = q
-    }
+    }/*
     import java.io._
     import scala.tools.nsc._
     import scala.tools.nsc.util._
@@ -84,7 +84,8 @@ class LFTjoinQueryTest extends TutorialFunSuite {
     //      compiler.genJVM.outputDir = fileSystem
 
       //run.compileSources(List(new util.BatchSourceFile("<stdin>", source.toString)))
-      run.compileSources(List(new util.BatchSourceFile("<stdin>", readFile("src/out/lftjquery_lftj_1gram1.check.scala"))))
+      run.compileSources(List(new util.BatchSourceFile("<stdin>", readFile("src/out/lftjquery_lftj_q5.check.scala"))))
+      //run.compileSources(List(new util.BatchSourceFile("<stdin>", readFile("src/out/lftjquery_lftj_1gram1.check.scala"))))
       reporter.printSummary()
 
       reporter.reset
@@ -97,7 +98,7 @@ class LFTjoinQueryTest extends TutorialFunSuite {
       
       val obj: String=>Unit = cons.newInstance(staticData.map(_._2.asInstanceOf[AnyRef]):_*).asInstanceOf[String=>Unit]
       obj
-    }
+    }*/
     override def runtest: Unit = {
       if (version == "query_staged0" && List("Group","HashJoin").exists(parsedQuery.toString contains _)) return ()
       test(version+" "+name) {
@@ -105,7 +106,7 @@ class LFTjoinQueryTest extends TutorialFunSuite {
           assert(expectedParsedQuery==parsedQuery)
         }
 //comment for develop. uncomment after it. 
-        //check(name, code)
+        check(name, code)
         precompile
         checkOut(name, "csv", eval(defaultEvalTable))
       }
@@ -148,15 +149,21 @@ class LFTjoinQueryTest extends TutorialFunSuite {
 
   trait ExpectedASTs extends QueryAST {
     val scan_t = Scan("t.csv")
-    val scan_1gram = Scan("1gram.csv.1",Some(Schema("Phrase", "Year", "MatchCount", "VolumeCount")),Some('\t'))
+    val scan_1gram = Scan("1gram.csv",Some(Schema("Phrase", "Year", "MatchCount", "VolumeCount")),Some('\t'))
     val scan_t1gram = Scan("t1gram.csv",Some(Schema("Phrase", "Year", "MatchCount", "VolumeCount")),Some('\t'))
+    val scan_customer = Scan("customer.csv3",Some(Schema("CUSTKEY",/*"C_NAME","C_ADDRESS",*/"NATIONKEY"/*,"PHONE","ACCTBAL","MKTSEGMENT","C_COMMENT"*/)),Some('\t'))
+    val scan_nation = Scan("nation.csv3",Some(Schema("NATIONKEY",/*"N_NAME",*/"REGIONKEY"/*,"R_COMMENT"*/)),Some('\t'))
+    val scan_region = Scan("region.csv3",Some(Schema("REGIONKEY"/*,"R_NAME","R_COMMENT"*/)),Some('\t'))
+    val scan_lineitem = Scan("lineitem.csv3",Some(Schema("ORDERKEY","PARTKEY","SUPPKEY"/*,"LINENUMBER","QUANTITY","EXTENDEDPRICE","DISCOUNT","TAX","RETURNFLAG","LINESTATUS","SHIPDATE","COMMITDATE","RECEIPTDATE","SHIPINSTRUCT","SHIPMODE","L_COMMENT"*/)),Some('\t'))
+    val scan_orders = Scan("orders.csv3",Some(Schema("ORDERKEY","CUSTKEY"/*,"ORDERSTATUS","TOTALPRICE","ORDERDATE","ORDERPRIORITY","CLERK","SHIPPRIORITY","O_COMMENT"*/)),Some('\t'))
+    val scan_supplier = Scan("supplier.csv3",Some(Schema("SUPPKEY",/*"S_NAME","S_ADDRESS",*/"NATIONKEY"/*,"S_PHONE","S_ACCTBAL","S_COMMENT"*/)),Some('\t'))
 
     val expectedAstForTest = Map(
       "1gram1" -> scan_1gram,
       "t1gram1" -> scan_t1gram,
       "lftj_t1gram1" -> LFTJoin(List(scan_t1gram, scan_t1gram)),
       "lftj_1gram1" -> LFTJoin(List(scan_1gram, scan_1gram)),
-      "lftj_1gram2" -> LFTJoin(List(scan_1gram, Filter(Eq(Field("Phrase"), Value("Auswanderung")), scan_1gram)))
+      "lftj_q5" -> LFTJoin(List(scan_nation, scan_region, scan_supplier, scan_customer, scan_orders, scan_lineitem))
     )
   }
 
@@ -165,8 +172,8 @@ class LFTjoinQueryTest extends TutorialFunSuite {
 
 //  testquery("t1gram1", s"select * from $t1gram")
   //print("Total execution time: ")
-  testquery("lftj_1gram1", "")
-  //println()
+  testquery("lftj_q5", "")
+  //testquery("lftj_t1gram1", "")
 }
 
 
