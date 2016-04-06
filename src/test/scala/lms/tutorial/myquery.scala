@@ -151,12 +151,12 @@ class LFTjoinQueryTest extends TutorialFunSuite {
     val scan_t = Scan("t.csv")
     val scan_1gram = Scan("1gram.csv",Some(Schema("Phrase", "Year", "MatchCount", "VolumeCount")),Some('\t'))
     val scan_t1gram = Scan("t1gram.csv",Some(Schema("Phrase", "Year", "MatchCount", "VolumeCount")),Some('\t'))
-    val scan_customer = Scan("customer.csv3",Some(Schema("CUSTKEY",/*"C_NAME","C_ADDRESS",*/"NATIONKEY"/*,"PHONE","ACCTBAL","MKTSEGMENT","C_COMMENT"*/)),Some('\t'))
-    val scan_nation = Scan("nation.csv3",Some(Schema("NATIONKEY",/*"N_NAME",*/"REGIONKEY"/*,"R_COMMENT"*/)),Some('\t'))
-    val scan_region = Scan("region.csv3",Some(Schema("REGIONKEY"/*,"R_NAME","R_COMMENT"*/)),Some('\t'))
-    val scan_lineitem = Scan("lineitem.csv3",Some(Schema("ORDERKEY","PARTKEY","SUPPKEY"/*,"LINENUMBER","QUANTITY","EXTENDEDPRICE","DISCOUNT","TAX","RETURNFLAG","LINESTATUS","SHIPDATE","COMMITDATE","RECEIPTDATE","SHIPINSTRUCT","SHIPMODE","L_COMMENT"*/)),Some('\t'))
-    val scan_orders = Scan("orders.csv3",Some(Schema("ORDERKEY","CUSTKEY"/*,"ORDERSTATUS","TOTALPRICE","ORDERDATE","ORDERPRIORITY","CLERK","SHIPPRIORITY","O_COMMENT"*/)),Some('\t'))
-    val scan_supplier = Scan("supplier.csv3",Some(Schema("SUPPKEY",/*"S_NAME","S_ADDRESS",*/"NATIONKEY"/*,"S_PHONE","S_ACCTBAL","S_COMMENT"*/)),Some('\t'))
+    val scan_customer = Scan("customer.csv",Some(Schema("CUSTKEY",/*"C_NAME","C_ADDRESS",*/"NATIONKEY"/*,"PHONE","ACCTBAL","MKTSEGMENT","C_COMMENT"*/)),Some('\t'))
+    val scan_nation = Scan("nation.csv",Some(Schema("NATIONKEY",/*"N_NAME",*/"REGIONKEY"/*,"R_COMMENT"*/)),Some('\t'))
+    val scan_region = Scan("region.csv",Some(Schema("REGIONKEY"/*,"R_NAME","R_COMMENT"*/)),Some('\t'))
+    val scan_lineitem = Scan("lineitem.csv",Some(Schema("ORDERKEY","PARTKEY","SUPPKEY"/*,"LINENUMBER","QUANTITY","EXTENDEDPRICE","DISCOUNT","TAX","RETURNFLAG","LINESTATUS","SHIPDATE","COMMITDATE","RECEIPTDATE","SHIPINSTRUCT","SHIPMODE","L_COMMENT"*/)),Some('\t'))
+    val scan_orders = Scan("orders.csv",Some(Schema("ORDERKEY","CUSTKEY"/*,"ORDERSTATUS","TOTALPRICE","ORDERDATE","ORDERPRIORITY","CLERK","SHIPPRIORITY","O_COMMENT"*/)),Some('\t'))
+    val scan_supplier = Scan("supplier.csv",Some(Schema("SUPPKEY",/*"S_NAME","S_ADDRESS",*/"NATIONKEY"/*,"S_PHONE","S_ACCTBAL","S_COMMENT"*/)),Some('\t'))
 
     val expectedAstForTest = Map(
       "1gram1" -> scan_1gram,

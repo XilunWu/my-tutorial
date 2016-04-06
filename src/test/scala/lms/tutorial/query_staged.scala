@@ -158,7 +158,7 @@ object query_staged {
 
       case LFTJoin(parents) =>
         //build TrieArrays
-
+        
         val schemaOfResult = resultSchema(LFTJoin(parents))
         val trieArrays = parents.map { p =>
           val buf = new TrieArray(1 << 23/*16*/, resultSchema(p), schemaOfResult)
@@ -169,7 +169,7 @@ object query_staged {
         trieArrays foreach {arr => arr.toTrieArray}
         val join = new LFTJmain(trieArrays, schemaOfResult)
         join.run(yld)
-
+        
       case PrintCSV(parent) =>
         val schema = resultSchema(parent)
         printSchema(schema)
@@ -460,7 +460,7 @@ object query_staged {
             if (currLv != -1) next
           }
           else if (currLv != schema.length - 1) {
-            //println("open: key = " + key)
+            //println("open: (currLv,key) = ("+currLv+","+key+")")
             pushIntoRes(key)
             open
           }
@@ -506,6 +506,8 @@ object query_staged {
             maxkey != minkey
           }
         }) {
+          //println("minkey = " + minkey)
+          //println("maxkey = " + maxkey)
           rels foreach {r => if(r.hasCol(currLv)) r.seek(maxkey)}
         }
         //println("LV: " + currLv + ", key = " + maxkey)
