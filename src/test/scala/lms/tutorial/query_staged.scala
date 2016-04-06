@@ -158,10 +158,10 @@ object query_staged {
 
       case LFTJoin(parents) =>
         //build TrieArrays
-        
+        val dataSize = Vector(25+1,5+1,10000+1,150000+1,1500000+1,6001215+1)
         val schemaOfResult = resultSchema(LFTJoin(parents))
-        val trieArrays = parents.map { p =>
-          val buf = new TrieArray(1 << 23/*16*/, resultSchema(p), schemaOfResult)
+        val trieArrays = (parents,dataSize).zipped.map { (p,size) =>
+          val buf = new TrieArray(size, resultSchema(p), schemaOfResult)
           execOp(p) {rec => buf += rec.fields}
           buf
         }
