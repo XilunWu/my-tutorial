@@ -187,6 +187,7 @@ object query_staged {
       val valueArray = schema.map(f => NewArray[String](dataSize))
       val indexArray = schema.map(f => NewArray[Int](dataSize))
       val lenArray = NewArray[Int](schema.length)
+      //should be Vector[Boolean]?
       val flagTable = NewArray[Boolean](schemaOfResult.length)
       flagTableCons
       def flagTableCons = {

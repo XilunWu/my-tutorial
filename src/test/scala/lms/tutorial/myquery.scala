@@ -107,8 +107,8 @@ class LFTjoinQueryTest extends TutorialFunSuite {
         }
 //comment for develop. uncomment after it. 
         check(name, code)
-        precompile
-        checkOut(name, "csv", eval(defaultEvalTable))
+        //precompile
+        //checkOut(name, "csv", eval(defaultEvalTable))
       }
     }
   }
