@@ -188,17 +188,10 @@ object query_staged {
       val indexArray = schema.map(f => NewArray[Int](dataSize))
       val lenArray = NewArray[Int](schema.length)
       //should be Vector[Boolean]?
-      val flagTable = NewArray[Boolean](schemaOfResult.length)
-      flagTableCons
-      def flagTableCons = {
-        var i = 0
-        schemaOfResult foreach { attr =>
-          flagTable(i) = schema.exists(x => x == attr)
-          i += 1
-        }
-      }
-      def hasCol(i: Rep[Int]) : Rep[Boolean] = flagTable(i)
-
+      val flagTable = schemaOfResult.map(f => schema contains f)
+      val levelTable = schema.map(f => schemaOfResult indexOf f)
+      def hasCol(i: Int): Boolean = flagTable(i)
+      def levelOf(i : Int): Int = levelTable indexOf i
       def apply(i: Rep[Int]) = {
         buf.map(b => b(i))
       }
@@ -209,7 +202,6 @@ object query_staged {
       def update(i: Rep[Int], x: Seq[Rep[String]]) = {
         (buf,x).zipped.foreach((b,x) => b(i) = x)
       }
-
       def output: Rep[Unit] = {
         var a = 0
         while (a < len) {
@@ -278,41 +270,51 @@ object query_staged {
         //done generating TrieArray
       }
       val cursor = NewArray[Int](schema.length)
-      var currLv = -1
 
-      def key: Rep[String] = {getValue(valueArray, currLv, cursor(currLv))}
-      def next: Rep[Unit] ={cursor(currLv) = cursor(currLv) + 1}
-
-      def atEnd: Rep[Boolean] = {
-        if (currLv == 0 && cursor(currLv) == lenArray(currLv)) true
-        else if (currLv != 0 && cursor(currLv) == getIndex(indexArray, currLv - 1, cursor(currLv - 1) + 1)) true
-        else false
+      def key(level:Int): Rep[String] = {
+        if (hasCol(level)){
+          val lv:Int = levelOf(level)
+          valueArray(lv)(cursor(lv))
+        }
+        else ""
       }
-      def seek(seekKey: Rep[String]): Rep[Unit] = {   //find the first of repetitions
+      def next(level:Int): Rep[Unit] ={
+        if (hasCol(level)){
+          val lv:Int = levelOf(level)
+          cursor(lv) = cursor(lv) + 1
+        }
+      }
+      def atEnd(level:Int): Rep[Boolean] = {
+        if (!hasCol(level)) false
+        else {
+          val lv:Int = levelOf(level)
+          if (lv == 0 && cursor(lv) == lenArray(lv)) true
+          else if (lv != 0 && cursor(lv) == indexArray(lv - 1)(cursor(lv - 1) + 1)) true
+          else false
+        }
+      }
+      def seek(level:Int, seekKey: Rep[String]): Rep[Unit] = {   //find the first of repetitions
         //println("searchKey = " + seekKey)
-        val start = cursor(currLv)
-        val end = if (currLv == 0) lenArray(0) else getIndex(indexArray, currLv - 1, cursor(currLv - 1) + 1)
-        //println("start = " + start + ", end = " + end)
-        bsearch(seekKey, start, end)
+        if (hasCol(level)) {
+          val lv:Int = levelOf(level)
+          val start = cursor(lv)
+          val end = if (lv == 0) lenArray(0) else indexArray(lv - 1)(cursor(lv - 1) + 1)
+          //println("start = " + start + ", end = " + end)
+          bsearch(lv, seekKey, start, end)
+        }
       }
-      def open: Rep[Unit] = {
-        currLv += 1
-        cursor(currLv) = if(currLv == 0) 0 else getIndex(indexArray, currLv - 1, cursor(currLv - 1))
-      }
-      def up: Rep[Unit] = currLv -= 1
-
-      def bsearch(seekKey: Rep[String], start: Rep[Int], end: Rep[Int]): Rep[Unit] = {
+      def bsearch(lv:Int, seekKey: Rep[String], start: Rep[Int], end: Rep[Int]): Rep[Unit] = {
         //println("start = " + start + ", end = " + end)
         var vstart = start
         var vend = end
         while(vstart != vend) {
           //Shall we transform it into access[Unit](){func}? This introduce more code. 
-          val pivot = getValue(valueArray, currLv, (vstart + vend) / 2)
+          val pivot = valueArray(lv)((vstart + vend) / 2)
           if (pivot == seekKey) {vstart = (vstart + vend) / 2; vend = vstart}
           else if (pivot < seekKey) {vstart = (vstart + vend) / 2 + 1}
           else {vend = (vstart + vend) / 2}
         }
-        cursor(currLv) = vstart
+        cursor(lv) = vstart
       }
     }
 
@@ -450,7 +452,9 @@ object query_staged {
       val res = NewArray[String](schema.length)
       var k = 0  //res
       def run(yld: Record => Rep[Unit]) = {
-        (currLv,currKey) = leapFrogJoin(0)
+        val tuple = leapFrogJoin(0)
+        currLv = tuple._1
+        currKey = tuple._2
         while (currLv != -1) {
           if (currLv != schema.length - 1) {
             //println("open: (currLv,key) = ("+currLv+","+key+")")
@@ -463,20 +467,22 @@ object query_staged {
             yld(makeRecord)
             k -= 1
           }
-          (currLv,currKey) = unlift[(Rep[Int],Rep[String])](leapFrogJoin)(currLv, schema.length)
+          val tuple = unlift[(Rep[Int],Rep[String])](leapFrogJoin)(currLv, schema.length)
+          currLv = tuple._1
+          currKey = tuple._2
         }
       }
       //Can we write leapFrogJoin in a reversal style?
-      def leapFrogJoin(level: Int):(Rep[Int],Rep[String]) = {
+      def leapFrogJoin(level: Int): (Rep[Int],Rep[String]) = {
         next(level)
         search(level)
         if (level == schema.length - 1) {
-          if (atEnd(level)) return(level - 1, "")
-          else return(level, key(level))
+          if (atEnd(level)) return (level - 1, "")
+          else return (level, key(level))
         }
         else {
-          if (atEnd(level)) return(level - 1, "")
-          else return(level + 1, key(level))
+          if (atEnd(level)) return (level - 1, "")
+          else return (level + 1, key(level))
         }
       }
       def unlift[T](f: Int => T)(numUnLift: Rep[Int], upperBound: Int, lowerBound: Int = 0, count: Int = 0): T = {
@@ -490,16 +496,38 @@ object query_staged {
       //check atEnd after calling next()
       def next(level: Int): Rep[Unit] = {
         //call iterator.next for every iterator in vector
-        rels foreach {r => if(r.hasCol(currLv)) r.next(level)}
+        rels.filter(r => r.hasCol(level)) foreach {r => r.next(level)}
       }
       def search(level: Int): Rep[Unit] = {
-        
+        var maxkey = ""
+        var minkey = ""
+        while({
+          maxkey = ""
+          minkey = ""
+          var flag = atEnd(level)
+          if (flag == true) {false} 
+          else {
+            val kArray = keys(level)
+            minkey = kArray(0)
+            kArray foreach {k => 
+              if (k > maxkey) maxkey = k
+              if (k < minkey) minkey = k
+            }
+          }
+          maxkey != minkey
+        }) {
+          rels.filter(r => r.hasCol(level)) foreach {r => r.seek(level, maxkey)}
+        }
         //println("LV: " + currLv + ", key = " + maxkey)
       }
       def key(level: Int): Rep[String] = {
-        
+        keys(level)(0)
       }
-      def atEnd(level: Int): Rep[Boolean] = rels.foldLeft(unit(false))((a, x) => a || (x.hasCol(currLv) && x.atEnd(level)))
+      def keys(level: Int): List[Rep[String]] = {
+        val array = rels.filter(r => r.hasCol(level)).map{r => r.key(level)}
+        array
+      }
+      def atEnd(level: Int): Rep[Boolean] = rels.filter(r => r.hasCol(level)).foldLeft(unit(false))((a, x) => a || x.atEnd(level))
       def makeRecord: Record = {
         //Record(res, schemaOfResult)
         var i = -1;
