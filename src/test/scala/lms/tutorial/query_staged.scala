@@ -445,96 +445,61 @@ object query_staged {
       */
 
     class LFTJmain (rels : List[TrieArray], schema: Schema){
-      var currLv = -1
-      //var p = 0
+      var currLv = 0
+      var currKey = ""  //change to Some[Rep[String]] after debug is done
       val res = NewArray[String](schema.length)
       var k = 0  //res
       def run(yld: Record => Rep[Unit]) = {
-        open
-        search
+        (currLv,currKey) = leapFrogJoin(0)
         while (currLv != -1) {
-          if (atEnd) {//2000lines in this branch
-            //println("up")
-            //rels foreach {r => if(r.hasCol(currLv)) println("currlv = " + r.currLv + ", key = " + r.key + ", atEnd = " + r.atEnd)}
-            k -= 1
-            up
-            if (currLv != -1) next
-          }
-          else if (currLv != schema.length - 1) {
+          if (currLv != schema.length - 1) {
             //println("open: (currLv,key) = ("+currLv+","+key+")")
-            pushIntoRes(key)
-            open
+            pushIntoRes(currKey)
           }
           else {
             //println("find 1 record: key = " + key)
             /* don't forget to call NEXT */
-            pushIntoRes(key)
+            pushIntoRes(currKey)
             yld(makeRecord)
             k -= 1
-            next
           }
-          if (currLv != -1 && !atEnd) search
+          (currLv,currKey) = unlift[(Rep[Int],Rep[String])](leapFrogJoin)(currLv, schema.length)
         }
+      }
+      //Can we write leapFrogJoin in a reversal style?
+      def leapFrogJoin(level: Int):(Rep[Int],Rep[String]) = {
+        next(level)
+        search(level)
+        if (level == schema.length - 1) {
+          if (atEnd(level)) return(level - 1, "")
+          else return(level, key(level))
+        }
+        else {
+          if (atEnd(level)) return(level - 1, "")
+          else return(level + 1, key(level))
+        }
+      }
+      def unlift[T](f: Int => T)(numUnLift: Rep[Int], upperBound: Int, lowerBound: Int = 0, count: Int = 0): T = {
+        if (numUnLift == count)
+          f(count)
+        else if (lowerBound <= count && count < upperBound - 1)
+          unlift[T](f)(numUnLift, upperBound, lowerBound, count + 1)
+        else
+          f(upperBound - 1)
       }
       //check atEnd after calling next()
-      def next: Rep[Unit] = {
+      def next(level: Int): Rep[Unit] = {
         //call iterator.next for every iterator in vector
-        rels foreach {r => if(r.hasCol(currLv)) r.next}
+        rels foreach {r => if(r.hasCol(currLv)) r.next(level)}
       }
-      def search: Rep[Unit] = {
-        //find the max key
-        var maxkey = ""
-        var minkey = ""
-        while({
-          var flag = atEnd
-          if (flag == true) {false} 
-          else {
-            maxkey = ""
-            var tmp = ""
-            rels foreach {r =>
-              if (r.hasCol(currLv)) {
-                tmp = r.key
-                if (tmp > maxkey) maxkey = tmp
-              }
-            }
-            minkey = maxkey
-            rels foreach {r =>
-              if (r.hasCol(currLv)) {
-                tmp = r.key
-                if (tmp < minkey) minkey = tmp
-              }
-            }
-            maxkey != minkey
-          }
-        }) {
-          //println("minkey = " + minkey)
-          //println("maxkey = " + maxkey)
-          rels foreach {r => if(r.hasCol(currLv)) r.seek(maxkey)}
-        }
+      def search(level: Int): Rep[Unit] = {
+        
         //println("LV: " + currLv + ", key = " + maxkey)
       }
-      /*
-      def init: Rep[Unit] = {
-        search
-      }*/
-      def key: Rep[String] = {
-        var key = ""
-        rels foreach {r =>
-          if (r.hasCol(currLv)) {
-            key = r.key
-          }
-        }
-        key
+      def key(level: Int): Rep[String] = {
+        
       }
-      def atEnd(): Rep[Boolean] = rels.foldLeft(unit(false))((a, x) => a || (x.hasCol(currLv) && x.atEnd))
-      def open: Rep[Unit] = {
-        currLv += 1
-        rels foreach {r => if(r.hasCol(currLv)) r.open}
-      }
-      def up: Rep[Unit] = {
-        rels foreach {r => if(r.hasCol(currLv)) r.up}        
-        currLv -= 1
-      }
+      def atEnd(level: Int): Rep[Boolean] = rels.foldLeft(unit(false))((a, x) => a || (x.hasCol(currLv) && x.atEnd(level)))
       def makeRecord: Record = {
         //Record(res, schemaOfResult)
         var i = -1;
