@@ -452,9 +452,9 @@ object query_staged {
       val res = NewArray[String](schema.length)
       var k = 0  //res
       def run(yld: Record => Rep[Unit]) = {
-        val tuple = leapFrogJoin(0)
-        currLv = tuple._1
-        currKey = tuple._2
+        val pair = leapFrogJoin(0)
+        currLv = pair.level
+        currKey = pair.key
         while (currLv != -1) {
           if (currLv != schema.length - 1) {
             //println("open: (currLv,key) = ("+currLv+","+key+")")
@@ -467,23 +467,48 @@ object query_staged {
             yld(makeRecord)
             k -= 1
           }
-          val tuple = unlift[(Rep[Int],Rep[String])](leapFrogJoin)(currLv, schema.length)
-          currLv = tuple._1
-          currKey = tuple._2
+          val pair = unlift[kPairs](leapFrogJoin)(currLv, schema.length)
+          currLv = pair.level
+          currKey = pair.key
         }
       }
       //Can we write leapFrogJoin in a reversal style?
-      def leapFrogJoin(level: Int): (Rep[Int],Rep[String]) = {
+      case class kPairs(lv: Rep[Int], k: Rep[String]) {
+        def key: Rep[String] = k
+        def level: Rep[Int] = lv
+      } 
+      def leapFrogJoin(level: Int): kPairs = {
+        var lv = level
         next(level)
         search(level)
         if (level == schema.length - 1) {
-          if (atEnd(level)) return (level - 1, "")
-          else return (level, key(level))
+          if (atEnd(level)) lv -= 1
         }
         else {
-          if (atEnd(level)) return (level - 1, "")
-          else return (level + 1, key(level))
+          if (atEnd(level)) lv -= 1
+          else lv += 1
         }
+        kPairs(lv,key(level))
+        /*
+        if (level == schema.length - 1) {
+          if (atEnd(level)) {
+            currLv -= 1
+            ""
+          }
+          else {
+            key(level)
+          }
+        }
+        else {
+          if (atEnd(level)) {
+            currLv -= 1
+            ""
+          }
+          else {
+            currLv += 1
+            key(level)
+          }
+        }*/
       }
       def unlift[T](f: Int => T)(numUnLift: Rep[Int], upperBound: Int, lowerBound: Int = 0, count: Int = 0): T = {
         if (numUnLift == count)
