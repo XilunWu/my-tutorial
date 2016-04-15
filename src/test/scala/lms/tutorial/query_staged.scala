@@ -223,7 +223,6 @@ object query_staged {
         var diff = false
         while(i < len) {
           diff = false
-          //here. could refactor the code.
           while (j < schema.length) {
             access[Unit](j, schema.length){j =>
               val curr_value = buf(j)(i)
@@ -236,39 +235,18 @@ object query_staged {
                 diff = true
               }
             }
-            /*
-            val curr_value = getValue(buf, j, i)
-            if (diff || lastRecord(j) != curr_value) {
-              updateValue(valueArray, j, next(j), curr_value)
-              if (j != schema.length - 1)   //no index for last attribute
-                updateIndex(indexArray, j, next(j), next(j + 1))
-              lastRecord(j) = curr_value
-              next(j) = next(j) + 1
-              diff = true
-            }
-            */
             j += 1
           }
-          //          print('\n')
           i += 1
           j = 0
         }
         //for the last row
-        while (j < schema.length - 1){
-          /*
-            How to return an array which can be modified?
-          */
-          //val index = getArray[Int](indexArray, j)
-          //index(next(j)) = next(j + 1)
+        while (j < schema.length - 1) {
           updateIndex(indexArray, j, next(j), next(j + 1))
           lenArray(j) = next(j)
           j += 1
         }
         lenArray(j) = next(j)
-        //j = 0
-        //println("After initialization: j = " + j)
-        //while (j < schema.length){println(lenArray(j)); j = j + 1; println("In loop: " + j)}
-        //done generating TrieArray
       }
       val cursor = NewArray[Int](schema.length)
 
@@ -464,10 +442,9 @@ object query_staged {
           lstLv = currLv
           currKey = unlift(leapFrogJoin)(currLv, schema.length)
           //println("level = " + lstLv + ", key = " + currKey)
-          if (currKey != "")
+          if (currKey != "") {
             pushIntoRes(currKey)
-          if (currLv == schema.length - 1) {
-            yld(makeRecord)
+            if (lstLv == schema.length - 1) yld(makeRecord)
           }
         }
       }
