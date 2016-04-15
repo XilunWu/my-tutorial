@@ -159,6 +159,7 @@ object query_staged {
       case LFTJoin(parents) =>
         //build TrieArrays
         val dataSize = Vector(25+1,5+1,10000+1,150000+1,1500000+1,6001215+1)
+        //val dataSize = Vector(25+1,5+1,10000+1,6+1,5+1,5+1)
         val schemaOfResult = resultSchema(LFTJoin(parents))
         val trieArrays = (parents,dataSize).zipped.map { (p,size) =>
           val buf = new TrieArray(size, resultSchema(p), schemaOfResult)
@@ -190,7 +191,7 @@ object query_staged {
       //should be Vector[Boolean]?
       val flagTable = schemaOfResult.map(f => schema contains f)
       val levelTable = schema.map(f => schemaOfResult indexOf f)
-      def hasCol(i: Int): Boolean = flagTable(i)
+      def hasCol(i: Int): Boolean = (i >= 0) && (i < schemaOfResult.length) && flagTable(i)
       def levelOf(i : Int): Int = levelTable indexOf i
       def apply(i: Rep[Int]) = {
         buf.map(b => b(i))
@@ -278,7 +279,14 @@ object query_staged {
         }
         else ""
       }
-      def next(level:Int): Rep[Unit] ={
+      def open(level:Int): Rep[Unit] = {
+        if (hasCol(level)){
+          val lv:Int = levelOf(level)
+          if (lv == 0) cursor(lv) = 0
+          else cursor(lv) = indexArray(lv-1)(cursor(lv-1))
+        }
+      }
+      def next(level:Int): Rep[Unit] = {
         if (hasCol(level)){
           val lv:Int = levelOf(level)
           cursor(lv) = cursor(lv) + 1
@@ -448,73 +456,42 @@ object query_staged {
 
     class LFTJmain (rels : List[TrieArray], schema: Schema){
       var currLv = 0
+      var lstLv = 0
       var currKey = ""  //change to Some[Rep[String]] after debug is done
       val res = NewArray[String](schema.length)
-      var k = 0  //res
       def run(yld: Record => Rep[Unit]) = {
-        val pair = leapFrogJoin(0)
-        currLv = pair.level
-        currKey = pair.key
         while (currLv != -1) {
-          if (currLv != schema.length - 1) {
-            //println("open: (currLv,key) = ("+currLv+","+key+")")
+          lstLv = currLv
+          currKey = unlift(leapFrogJoin)(currLv, schema.length)
+          //println("level = " + lstLv + ", key = " + currKey)
+          if (currKey != "")
             pushIntoRes(currKey)
-          }
-          else {
-            //println("find 1 record: key = " + key)
-            /* don't forget to call NEXT */
-            pushIntoRes(currKey)
+          if (currLv == schema.length - 1) {
             yld(makeRecord)
-            k -= 1
           }
-          val pair = unlift[kPairs](leapFrogJoin)(currLv, schema.length)
-          currLv = pair.level
-          currKey = pair.key
         }
       }
       //Can we write leapFrogJoin in a reversal style?
-      case class kPairs(lv: Rep[Int], k: Rep[String]) {
-        def key: Rep[String] = k
-        def level: Rep[Int] = lv
-      } 
-      def leapFrogJoin(level: Int): kPairs = {
-        var lv = level
-        next(level)
+      def leapFrogJoin(level: Int): Rep[String] = {
         search(level)
+        //println("key = " + key(level))
+        val resultKey = key(level)
+        /* need modification here. for each relation, the case is diff! */
         if (level == schema.length - 1) {
-          if (atEnd(level)) lv -= 1
+          if (atEnd(level)) {currLv -= 1; next(level-1)}
+          else next(level)
         }
         else {
-          if (atEnd(level)) lv -= 1
-          else lv += 1
+          if (atEnd(level)) {currLv -= 1; next(level-1)}
+          else {currLv += 1; open(level+1)}
         }
-        kPairs(lv,key(level))
-        /*
-        if (level == schema.length - 1) {
-          if (atEnd(level)) {
-            currLv -= 1
-            ""
-          }
-          else {
-            key(level)
-          }
-        }
-        else {
-          if (atEnd(level)) {
-            currLv -= 1
-            ""
-          }
-          else {
-            currLv += 1
-            key(level)
-          }
-        }*/
+        resultKey
       }
-      def unlift[T](f: Int => T)(numUnLift: Rep[Int], upperBound: Int, lowerBound: Int = 0, count: Int = 0): T = {
+      def unlift(f: Int => Rep[String])(numUnLift: Rep[Int], upperBound: Int, lowerBound: Int = 0, count: Int = 0): Rep[String] = {
         if (numUnLift == count)
           f(count)
         else if (lowerBound <= count && count < upperBound - 1)
-          unlift[T](f)(numUnLift, upperBound, lowerBound, count + 1)
+          unlift(f)(numUnLift, upperBound, lowerBound, count + 1)
         else
           f(upperBound - 1)
       }
@@ -527,6 +504,9 @@ object query_staged {
         var maxkey = ""
         var minkey = ""
         while({
+          rels.filter(r => r.hasCol(level)) foreach {r =>
+            //println("lv = " + r.levelOf(level) + ", key = " + r.key(level))
+          }
           maxkey = ""
           minkey = ""
           var flag = atEnd(level)
@@ -546,13 +526,15 @@ object query_staged {
         //println("LV: " + currLv + ", key = " + maxkey)
       }
       def key(level: Int): Rep[String] = {
-        keys(level)(0)
+        if(!atEnd(level)) keys(level)(0)
+        else ""
       }
       def keys(level: Int): List[Rep[String]] = {
         val array = rels.filter(r => r.hasCol(level)).map{r => r.key(level)}
         array
       }
       def atEnd(level: Int): Rep[Boolean] = rels.filter(r => r.hasCol(level)).foldLeft(unit(false))((a, x) => a || x.atEnd(level))
+      def open(level:Int): Rep[Unit] = rels.filter(r => r.hasCol(level)).foreach(r => r.open(level))
       def makeRecord: Record = {
         //Record(res, schemaOfResult)
         var i = -1;
@@ -560,8 +542,7 @@ object query_staged {
         Record(key, schema)
       }
       def pushIntoRes(key: Rep[String]) = {
-        res.update(k, key)
-        k += 1
+        res.update(lstLv, key)
       }
     }
   }
