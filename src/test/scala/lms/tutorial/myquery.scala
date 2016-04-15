@@ -55,57 +55,13 @@ class LFTjoinQueryTest extends TutorialFunSuite {
   abstract class ScalaStagedQueryDriver(val name: String, val query: String) extends DslDriver[String,Unit] with StagedTestDriver with StagedQueryProcessor with ScannerExp { q =>
     override val codegen = new DslGen with ScalaGenScanner {
       val IR: q.type = q
-    }/*
-    import java.io._
-    import scala.tools.nsc._
-    import scala.tools.nsc.util._
-    import scala.tools.nsc.reporters._
-    import scala.tools.nsc.io._
-    import scala.tools.nsc.interpreter.AbstractFileClassLoader
-    override def compile[String,Unit](f: Exp[String] => Exp[Unit])(implicit mA: Manifest[String], mB: Manifest[Unit]): String=>Unit = {
-      if (this.compiler eq null)
-        setupCompiler()
-      /*
-      val className = "staged$" + compileCount
-      compileCount += 1
-      */
-      val className = "Snippet"
-      val source = new StringWriter()
-      val writer = new PrintWriter(source)
-      val staticData = codegen.emitSource(f, className, writer)
-
-      codegen.emitDataStructures(writer)
-
-      val compiler = this.compiler
-      val run = new compiler.Run
-
-      val fileSystem = new VirtualDirectory("<vfs>", None)
-      compiler.settings.outputDirs.setSingleOutput(fileSystem)
-    //      compiler.genJVM.outputDir = fileSystem
-
-      //run.compileSources(List(new util.BatchSourceFile("<stdin>", source.toString)))
-      run.compileSources(List(new util.BatchSourceFile("<stdin>", readFile("src/out/lftjquery_lftj_q5.check.scala"))))
-      //run.compileSources(List(new util.BatchSourceFile("<stdin>", readFile("src/out/lftjquery_lftj_1gram1.check.scala"))))
-      reporter.printSummary()
-
-      reporter.reset
-      //output.reset
-
-      val parent = this.getClass.getClassLoader
-      val loader = new AbstractFileClassLoader(fileSystem, this.getClass.getClassLoader)
-      val cls: Class[_] = loader.loadClass(className)
-      val cons = cls.getConstructor(staticData.map(_._1.tp.erasure):_*)
-      
-      val obj: String=>Unit = cons.newInstance(staticData.map(_._2.asInstanceOf[AnyRef]):_*).asInstanceOf[String=>Unit]
-      obj
-    }*/
+    }
     override def runtest: Unit = {
       if (version == "query_staged0" && List("Group","HashJoin").exists(parsedQuery.toString contains _)) return ()
       test(version+" "+name) {
         for (expectedParsedQuery <- expectedAstForTest.get(name)) {
           assert(expectedParsedQuery==parsedQuery)
         }
-//comment for develop. uncomment after it. 
         check(name, code)
         precompile
         checkOut(name, "csv", eval(defaultEvalTable))
@@ -134,13 +90,11 @@ class LFTjoinQueryTest extends TutorialFunSuite {
       List(
 //        new ScalaPlainQueryDriver(name, query) with query_unstaged.QueryInterpreter,
 //        new ScalaStagedQueryDriver(name, query) with query_staged0.QueryCompiler,
-        new ScalaStagedQueryDriver(name, query) with query_staged.QueryCompiler
-/*
+//        new ScalaStagedQueryDriver(name, query) with query_staged.QueryCompiler,
         new CStagedQueryDriver(name, query) with query_optc.QueryCompiler {
           // FIXME: hack so i don't need to replace Value -> #Value in all the files right now
           override def isNumericCol(s: String) = s == "Value" || super.isNumericCol(s)
         }
-*/
       )
     drivers.foreach(_.runtest)
   }
@@ -159,10 +113,6 @@ class LFTjoinQueryTest extends TutorialFunSuite {
     val scan_supplier = Scan("supplier.csv",Some(Schema("SUPPKEY",/*"S_NAME","S_ADDRESS",*/"NATIONKEY"/*,"S_PHONE","S_ACCTBAL","S_COMMENT"*/)),Some('\t'))
 
     val expectedAstForTest = Map(
-      /*"1gram1" -> scan_1gram,
-      "t1gram1" -> scan_t1gram,
-      "lftj_t1gram1" -> LFTJoin(List(scan_t1gram, scan_t1gram)),
-      "lftj_1gram1" -> LFTJoin(List(scan_1gram, scan_1gram)),*/
       "lftj_q5" -> LFTJoin(List(scan_nation, scan_region, scan_supplier, scan_customer, scan_orders, scan_lineitem))
     )
   }
@@ -171,9 +121,7 @@ class LFTjoinQueryTest extends TutorialFunSuite {
   val t1gram = "? schema Phrase, Year, MatchCount, VolumeCount delim \\t"
 
 //  testquery("t1gram1", s"select * from $t1gram")
-  //print("Total execution time: ")
   testquery("lftj_q5", "")
-  //testquery("lftj_t1gram1", "")
 }
 
 
