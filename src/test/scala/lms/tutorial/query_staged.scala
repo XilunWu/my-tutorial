@@ -30,27 +30,6 @@ object query_staged {
       else
         f(len-1)
     }
-    //the if-then-else branch in get/update function can be eliminated.
-    def getValue(buf: Vector[Rep[Array[String]]], i: Rep[Int], j: Rep[Int]): Rep[String] = access[String](i, buf.length){i =>
-      if (i < buf.length)
-        buf(i)(j)
-      else
-        unit("")
-    }
-    def getIndex(buf: Vector[Rep[Array[Int]]], i: Rep[Int], j: Rep[Int]): Rep[Int] = access[Int](i, buf.length){i =>
-      if (i < buf.length)
-        buf(i)(j)
-      else
-        unit(0)
-    }
-    def updateValue(buf: Vector[Rep[Array[String]]], i: Rep[Int], j: Rep[Int], v: Rep[String]): Rep[Unit] = access[Unit](i, buf.length){i =>
-      if (i < buf.length)
-        buf(i)(j) = v
-    }
-    def updateIndex(buf: Vector[Rep[Array[Int]]], i: Rep[Int], j: Rep[Int], v: Rep[Int]): Rep[Unit] = access[Unit](i, buf.length){i =>
-      if (i < buf.length)
-        buf(i)(j) = v
-    }
     /**
       Low-Level Processing Logic
       --------------------------
@@ -110,13 +89,6 @@ object query_staged {
       case PrintCSV(parent)        => Schema()
       //Only for test
       case LFTJoin(parents)        =>
-        //This is incorrect because it only guarantees the order or attributes within each table,
-        //but not among tables.
-        /*
-        val schema = scala.collection.mutable.ArrayBuffer[String]()
-        parents foreach {p => schema ++= resultSchema(p)}
-        schema.toVector.distinct    //no repeated attributes
-        */ 
         val schema = Schema("ORDERKEY","CUSTKEY","PARTKEY","SUPPKEY","NATIONKEY","REGIONKEY")
         schema
     }
@@ -242,7 +214,9 @@ object query_staged {
         }
         //for the last row
         while (j < schema.length - 1) {
-          updateIndex(indexArray, j, next(j), next(j + 1))
+          access[Unit](j, schema.length) { j =>
+            indexArray(j)(next(j)) = next(j+1)
+          }
           lenArray(j) = next(j)
           j += 1
         }
