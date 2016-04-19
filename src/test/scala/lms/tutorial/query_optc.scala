@@ -233,7 +233,7 @@ Data Structure Implementations
       case (RString(b1,l1), RString(b2,l2)) => b1 = b2; l1 = l2
     }
     def +=(x: Fields) = {
-      getRowData(buf,len) = x
+      update(buf,len,x)
       len += 1
     }
     def output: Rep[Unit] = {
@@ -251,7 +251,7 @@ Data Structure Implementations
       //generate indexArray
       val lastRecord = schema.map {
         case hd if isNumericCol(hd) => RInt(0)
-        case _ => RString("",0))
+        case _ => RString("",0)
       }
       val next = NewArray[Int](schema.length)
       var i = 0; var j = 0
@@ -290,44 +290,31 @@ Data Structure Implementations
     }
     val cursor = NewArray[Int](schema.length)
 
-    def key(level:Int): Option[RField] = {
-      if (hasCol(level)){
-        val lv:Int = levelOf(level)
-        getRowData(valueArray, cursor(lv))(lv)
-      }
-      else None
+    def key(level:Int): RField = {
+      val lv:Int = levelOf(level)
+      getRowData(valueArray, cursor(lv))(lv)
     }
     def open(level:Int): Rep[Unit] = {
-      if (hasCol(level)){
-        val lv:Int = levelOf(level)
-        if (lv == 0) cursor(lv) = 0
-        else cursor(lv) = indexArray(lv-1)(cursor(lv-1))
-      }
+      val lv:Int = levelOf(level)
+      if (lv == 0) cursor(lv) = 0
+      else cursor(lv) = indexArray(lv-1)(cursor(lv-1))
     }
     def next(level:Int): Rep[Unit] = {
-      if (hasCol(level)){
-        val lv:Int = levelOf(level)
-        cursor(lv) = cursor(lv) + 1
-      }
+      val lv:Int = levelOf(level)
+      cursor(lv) = cursor(lv) + 1
     }
     def atEnd(level:Int): Rep[Boolean] = {
-      if (!hasCol(level)) false
-      else {
-        val lv:Int = levelOf(level)
-        if (lv == 0 && cursor(lv) == lenArray(lv)) true
-        else if (lv != 0 && cursor(lv) == indexArray(lv - 1)(cursor(lv - 1) + 1)) true
-        else false
-      }
+      val lv:Int = levelOf(level)
+      if (lv == 0 && cursor(lv) == lenArray(lv)) true
+      else if (lv != 0 && cursor(lv) == indexArray(lv - 1)(cursor(lv - 1) + 1)) true
+      else false
     }
     def seek(level:Int, seekKey: Rep[String]): Rep[Unit] = {   //find the first of repetitions
-      //println("searchKey = " + seekKey)
-      if (hasCol(level)) {
-        val lv:Int = levelOf(level)
-        val start = cursor(lv)
-        val end = if (lv == 0) lenArray(0) else indexArray(lv - 1)(cursor(lv - 1) + 1)
-        //println("start = " + start + ", end = " + end)
-        bsearch(lv, seekKey, start, end)
-      }
+      val lv:Int = levelOf(level)
+      val start = cursor(lv)
+      val end = if (lv == 0) lenArray(0) else indexArray(lv - 1)(cursor(lv - 1) + 1)
+      //println("start = " + start + ", end = " + end)
+      bsearch(lv, seekKey, start, end)
     }
     def bsearch(lv:Int, seekKey: Rep[String], start: Rep[Int], end: Rep[Int]): Rep[Unit] = {
       //println("start = " + start + ", end = " + end)
@@ -494,7 +481,6 @@ Data Structure Implementations
       while (currLv != -1) {
         lstLv = currLv
         currCursor = unlift(leapFrogJoin)(currLv, schema.length) //return -1 if not found
-        //println("level = " + lstLv + ", key = " + currKey)
         if (currCursor != -1) {
           pushIntoRes(currCursor)
           if (lstLv == schema.length - 1) yld(makeRecord)
@@ -533,10 +519,7 @@ Data Structure Implementations
         case hd if isNumericCol(hd) => RInt(0)
         case _ => RString("",0)
       }
-      var minkey = schema(level) match {
-        case hd if isNumericCol(hd) => RInt(0)
-        case _ => RString("",0)
-      }
+      var minkey = maxkey
       while({
         var flag = atEnd(level)
         if (flag == true) {false} 
@@ -546,10 +529,7 @@ Data Structure Implementations
             case RInt(value) => RInt(value)
             case RString(b,l) => RString(b,l)
           }
-          maxkey = schema(level) match {
-            case hd if isNumericCol(hd) => RInt(0)
-            case _ => RString("",0)
-          }
+          maxkey = minkey
           kArray foreach {k => 
             if (k lessThan minkey) 
               minkey = k match {
@@ -569,10 +549,7 @@ Data Structure Implementations
       }
       //println("LV: " + currLv + ", key = " + maxkey)
     }
-    def key(level: Int) = {
-      if(!atEnd(level)) keys(level)(0)
-      else None
-    }
+    def key(level: Int) = keys(level)(0)
     def keys(level: Int) = {
       val array = rels.filter(r => r.hasCol(level)).map{r => r.key(level)}
       array
