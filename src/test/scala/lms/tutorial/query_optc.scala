@@ -74,6 +74,7 @@ Low-Level Processing Logic
   case class RInt(val value: Rep[Int]) extends RField {
     def print() = printf("%d",value)
     def compare(o: RField) = o match { case RInt(v2) => value == v2 }
+    def lessThan(o: RField) = o match { case RInt(v2) =>  value < v2 }
     def hash = value.asInstanceOf[Rep[Long]]
   }
 
@@ -141,9 +142,8 @@ Query Interpretation = Compilation
     case HashJoin(left, right)   => resultSchema(left) ++ resultSchema(right)
     case PrintCSV(parent)        => Schema()
     case LFTJoin(parents)        =>
-        val schema = scala.collection.mutable.ArrayBuffer[String]()
-        parents foreach {p => schema ++= resultSchema(p)}
-        schema.toVector.distinct    //no repeated attributes
+        val schema = Schema("#ORDERKEY","#CUSTKEY","#PARTKEY","#SUPPKEY","#NATIONKEY","#REGIONKEY")
+        schema
   }
 
   def execOp(o: Operator)(yld: Record => Rep[Unit]): Rep[Unit] = o match {
@@ -180,6 +180,18 @@ Query Interpretation = Compilation
           yld(Record(rec1.fields ++ rec2.fields, rec1.schema ++ rec2.schema))
         }
       }
+    case LFTJoin(parents) =>
+      val dataSize = Vector(25+1,5+1,10000+1,150000+1,1500000+1,6001215+1)
+      //val dataSize = Vector(25+1,5+1,10000+1,6+1,5+1,5+1)
+      val schemaOfResult = resultSchema(LFTJoin(parents))
+      val trieArrays = (parents,dataSize).zipped.map { (p,size) =>
+        val buf = new TrieArray(size, resultSchema(p), schemaOfResult)
+        execOp(p) {rec => buf += rec.fields} //fields is of type Fields: Vector[RField]
+        buf
+      }
+      trieArrays foreach {arr => arr.toTrieArray}
+      val join = new LFTJmain(trieArrays, schemaOfResult)
+      join.run(yld)
     case PrintCSV(parent) =>
       val schema = resultSchema(parent)
       printSchema(schema)
@@ -191,6 +203,147 @@ Query Interpretation = Compilation
 Data Structure Implementations
 ------------------------------
 */
+  class TrieArray (dataSize: Int, schema: Schema, schemaOfResult: Schema) {
+    var len = 0
+    val buf = schema.map {
+      case hd if isNumericCol(hd) => IntColBuffer(NewArray[Int](dataSize))
+      case _ => StringColBuffer(NewArray[String](dataSize), NewArray[Int](dataSize))
+    }
+    val valueArray = schema.map {
+      case hd if isNumericCol(hd) => IntColBuffer(NewArray[Int](dataSize))
+      case _ => StringColBuffer(NewArray[String](dataSize), NewArray[Int](dataSize))
+    }
+    val indexArray = schema.map(f => NewArray[Int](dataSize))
+    val lenArray = NewArray[Int](schema.length)
+    //should be Vector[Boolean]?
+    val flagTable = schemaOfResult.map(f => schema contains f)
+    val levelTable = schema.map(f => schemaOfResult indexOf f)
+    def hasCol(i: Int): Boolean = (i >= 0) && (i < schemaOfResult.length) && flagTable(i)
+    def levelOf(i : Int): Int = levelTable indexOf i
+    def getRowData(data:Vector[ColBuffer], i:Rep[Int]) = data.map {
+      case IntColBuffer(b) => RInt(b(i))
+      case StringColBuffer(b,l) => RString(b(i),l(i))
+    }
+    def update(data: Vector[ColBuffer], i: Rep[Int], x: Fields) = (data,x).zipped.foreach {
+      case (IntColBuffer(b), RInt(x)) => b(i) = x
+      case (StringColBuffer(b,l), RString(x,y)) => b(i) = x; l(i) = y
+    }
+    def update(data: Vector[ColBuffer], i: Rep[Int], j: Int, x: RField) = (data(j), x) match {
+      case (RInt(x1), RInt(x2)) => x1 = x2
+      case (RString(b1,l1), RString(b2,l2)) => b1 = b2; l1 = l2
+    }
+    def +=(x: Fields) = {
+      getRowData(buf,len) = x
+      len += 1
+    }
+    def output: Rep[Unit] = {
+      var a = 0
+      while (a < len) {
+        buf foreach {line =>
+          line(a).print()
+          print(" ")
+        }
+        print('\n')
+        a += 1
+      }
+    }
+    def toTrieArray: Rep[Unit] = {
+      //generate indexArray
+      val lastRecord = schema.map {
+        case hd if isNumericCol(hd) => RInt(0)
+        case _ => RString("",0))
+      }
+      val next = NewArray[Int](schema.length)
+      var i = 0; var j = 0
+      var diff = false
+      while(i < len) {
+        diff = false
+        while (j < schema.length) {
+          access[Unit](j, schema.length){j =>
+            val curr_value = getRowData(buf,i)(j)
+            if (diff || !(lastRecord(j) compare curr_value)) {
+              update(valueArray, next(j), j, curr_value)
+              if (j != schema.length - 1)
+                  indexArray(j)(next(j)) = next(j+1)
+              (lastRecord(j),curr_value) match {
+                case (RInt(x1), RInt(x2)) => x1 = x2
+                case (RString(b1,l1), RString(b2,l2)) => b1 = b2; l1 = l2
+              }
+              next(j) = next(j) + 1
+              diff = true
+            }
+          }
+          j += 1
+        }
+        i += 1
+        j = 0
+      }
+      //for the last row
+      while (j < schema.length - 1) {
+        access[Unit](j, schema.length) { j =>
+          indexArray(j)(next(j)) = next(j+1)
+        }
+        lenArray(j) = next(j)
+        j += 1
+      }
+      lenArray(j) = next(j)
+    }
+    val cursor = NewArray[Int](schema.length)
+
+    def key(level:Int): Option[RField] = {
+      if (hasCol(level)){
+        val lv:Int = levelOf(level)
+        getRowData(valueArray, cursor(lv))(lv)
+      }
+      else None
+    }
+    def open(level:Int): Rep[Unit] = {
+      if (hasCol(level)){
+        val lv:Int = levelOf(level)
+        if (lv == 0) cursor(lv) = 0
+        else cursor(lv) = indexArray(lv-1)(cursor(lv-1))
+      }
+    }
+    def next(level:Int): Rep[Unit] = {
+      if (hasCol(level)){
+        val lv:Int = levelOf(level)
+        cursor(lv) = cursor(lv) + 1
+      }
+    }
+    def atEnd(level:Int): Rep[Boolean] = {
+      if (!hasCol(level)) false
+      else {
+        val lv:Int = levelOf(level)
+        if (lv == 0 && cursor(lv) == lenArray(lv)) true
+        else if (lv != 0 && cursor(lv) == indexArray(lv - 1)(cursor(lv - 1) + 1)) true
+        else false
+      }
+    }
+    def seek(level:Int, seekKey: Rep[String]): Rep[Unit] = {   //find the first of repetitions
+      //println("searchKey = " + seekKey)
+      if (hasCol(level)) {
+        val lv:Int = levelOf(level)
+        val start = cursor(lv)
+        val end = if (lv == 0) lenArray(0) else indexArray(lv - 1)(cursor(lv - 1) + 1)
+        //println("start = " + start + ", end = " + end)
+        bsearch(lv, seekKey, start, end)
+      }
+    }
+    def bsearch(lv:Int, seekKey: Rep[String], start: Rep[Int], end: Rep[Int]): Rep[Unit] = {
+      //println("start = " + start + ", end = " + end)
+      var vstart = start
+      var vend = end
+      while(vstart != vend) {
+        //Shall we transform it into access[Unit](){func}? This introduce more code. 
+        val pivot = getRowData(valueArray, (vstart + vend) / 2)(lv)
+        if (pivot compare seekKey) {vstart = (vstart + vend) / 2; vend = vstart}
+        else if (pivot lessThan seekKey) {vstart = (vstart + vend) / 2 + 1}
+        else {vend = (vstart + vend) / 2}
+      }
+      cursor(lv) = vstart
+    }
+  }
+
 
   // defaults for hash sizes etc
 
@@ -325,6 +478,115 @@ Data Structure Implementations
     def apply(i: Rep[Int]) = buf.map {
       case IntColBuffer(b) => RInt(b(i))
       case StringColBuffer(b,l) => RString(b(i),l(i))
+    }
+  }
+
+  /**
+      Trie-Join
+      --------------------------
+      */
+  class LFTJmain (rels : List[TrieArray], schema: Schema){
+    var currLv = 0
+    var lstLv = 0
+    var currCursor = 0  //change to Some[Rep[String]] after debug is done
+    val resCursor = NewArray[Int](schema.length)
+    def run(yld: Record => Rep[Unit]) = {
+      while (currLv != -1) {
+        lstLv = currLv
+        currCursor = unlift(leapFrogJoin)(currLv, schema.length) //return -1 if not found
+        //println("level = " + lstLv + ", key = " + currKey)
+        if (currCursor != -1) {
+          pushIntoRes(currCursor)
+          if (lstLv == schema.length - 1) yld(makeRecord)
+        }
+      }
+    }
+    //Can we write leapFrogJoin in a reversal style?
+    def leapFrogJoin(level: Int): Rep[Int] = {
+      val resultCursor = search(level)
+      /* need modification here. for each relation, the case is diff! */
+      if (level == schema.length - 1) {
+        if (atEnd(level)) {currLv -= 1; next(level-1)}
+        else next(level)
+      }
+      else {
+        if (atEnd(level)) {currLv -= 1; next(level-1)}
+        else {currLv += 1; open(level+1)}
+      }
+      resultCursor
+    }
+    def unlift(f: Int => Rep[Int])(numUnLift: Rep[Int], upperBound: Int, lowerBound: Int = 0, count: Int = 0): Rep[Int] = {
+      if (numUnLift == count)
+        f(count)
+      else if (lowerBound <= count && count < upperBound - 1)
+        unlift(f)(numUnLift, upperBound, lowerBound, count + 1)
+      else
+        f(upperBound - 1)
+    }
+    //check atEnd after calling next()
+    def next(level: Int): Rep[Unit] = {
+      //call iterator.next for every iterator in vector
+      rels.filter(r => r.hasCol(level)) foreach {r => r.next(level)}
+    }
+    def search(level: Int): Rep[Unit] = {
+      var maxkey = schema(level) match {
+        case hd if isNumericCol(hd) => RInt(0)
+        case _ => RString("",0)
+      }
+      var minkey = schema(level) match {
+        case hd if isNumericCol(hd) => RInt(0)
+        case _ => RString("",0)
+      }
+      while({
+        var flag = atEnd(level)
+        if (flag == true) {false} 
+        else {
+          val kArray = keys(level)
+          minkey = kArray(0) match {
+            case RInt(value) => RInt(value)
+            case RString(b,l) => RString(b,l)
+          }
+          maxkey = schema(level) match {
+            case hd if isNumericCol(hd) => RInt(0)
+            case _ => RString("",0)
+          }
+          kArray foreach {k => 
+            if (k lessThan minkey) 
+              minkey = k match {
+                case RInt(value) => RInt(value)
+                case RString(b,l) => RString(b,l)
+              }
+            else 
+              maxkey = k match {
+                case RInt(value) => RInt(value)
+                case RString(b,l) => RString(b,l)
+              }
+          }
+        }
+        !(maxkey compare minkey)
+      }) {
+        rels.filter(r => r.hasCol(level)) foreach {r => r.seek(level, maxkey)}
+      }
+      //println("LV: " + currLv + ", key = " + maxkey)
+    }
+    def key(level: Int) = {
+      if(!atEnd(level)) keys(level)(0)
+      else None
+    }
+    def keys(level: Int) = {
+      val array = rels.filter(r => r.hasCol(level)).map{r => r.key(level)}
+      array
+    }
+    def atEnd(level: Int): Rep[Boolean] = rels.filter(r => r.hasCol(level)).foldLeft(unit(false))((a, x) => a || x.atEnd(level))
+    def open(level:Int): Rep[Unit] = rels.filter(r => r.hasCol(level)).foreach(r => r.open(level))
+    def makeRecord: Record = {
+      //Record(res, schemaOfResult)
+      var i = -1;
+      val key = schema.map{x => {i += 1; res(i)}}
+      Record(key, schema)
+    }
+    def pushIntoRes(key: Rep[String]) = {
+      res.update(lstLv, key)
     }
   }
 }}
