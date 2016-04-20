@@ -169,7 +169,7 @@ object query_staged {
         buf.map(b => b(i))
       }
       def +=(x: Seq[Rep[String]]) = {
-        buf(len) = x
+        (buf,x).zipped.foreach((b,x) => b(len) = x)
         len += 1
       }
       def output: Rep[Unit] = {

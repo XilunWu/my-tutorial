@@ -211,6 +211,20 @@ Query Interpretation = Compilation
 Data Structure Implementations
 ------------------------------
 */
+  def access[T:Manifest](i: Rep[Int], len: Int)(f: Int => Rep[T]): Rep[T] = {
+    if(i >= len)
+      f(0)
+    else
+      accessHelp[T](i, len, 0)(f)
+  }
+  def accessHelp[T:Manifest](i: Rep[Int], len: Int, count: Int)(f: Int => Rep[T]): Rep[T] = {
+    if (i == count)
+      f(count)
+    else if (count < len - 1)
+      accessHelp[T](i, len, count + 1)(f)
+    else
+      f(len-1)
+  }
   class TrieArray (dataSize: Int, schema: Schema, schemaOfResult: Schema) {
     var len = 0
     val buf = new ArrayBuffer(dataSize, schema)
@@ -467,13 +481,16 @@ Data Structure Implementations
       */
   class LFTJmain (rels : List[TrieArray], schema: Schema){
     var currLv = 0
+    var lstLv = 0
     val res = schema.map{
       case hd if isNumericCol(hd) => RInt(0)
       case _ => RString("",0)
     }
     def run(yld: Record => Rep[Unit]) = {
       while (currLv != -1) {
+        lstLv = currLv
         unlift(leapFrogJoin)(currLv, schema.length) //return -1 if not found
+        if (lstLv == schema.length - 1) yld(makeRecord)
       }
     }
     //Can we write leapFrogJoin in a reversal style?
@@ -488,10 +505,7 @@ Data Structure Implementations
         if (atEnd(level)) {currLv -= 1; next(level-1)}
         else {currLv += 1; open(level+1)}
       }
-      if(!atEnd(level)) {
-        pushIntoRes(level, key(level))
-        if (level == schema.length - 1) yld(makeRecord)
-      }
+      if(!atEnd(level)) pushIntoRes(level, key(level))
     }
     def unlift(f: Int => Rep[Unit])(numUnLift: Rep[Int], upperBound: Int, lowerBound: Int = 0, count: Int = 0): Rep[Unit] = {
       if (numUnLift == count)
@@ -507,31 +521,37 @@ Data Structure Implementations
       rels.filter(r => r.hasCol(level)) foreach {r => r.next(level)}
     }
     def search(level: Int): Rep[Unit] = {
-      var maxkey = schema(level) match {
+      val maxkey = schema(level) match {
         case hd if isNumericCol(hd) => RInt(0)
         case _ => RString("",0)
       }
-      var minkey = maxkey
+      val minkey = schema(level) match {
+        case hd if isNumericCol(hd) => RInt(0)
+        case _ => RString("",0)
+      }
       while({
         var flag = atEnd(level)
         if (flag == true) {false} 
         else {
           val kArray = keys(level)
-          minkey = kArray(0) match {
-            case RInt(value) => RInt(value)
-            case RString(b,l) => RString(b,l)
+          (minkey,kArray(0)) match {
+            case (RInt(x),RInt(value)) => x=value
+            case (RString(b,l),RString(str,len)) => b=str; l=len
           }
-          maxkey = minkey
+          (maxkey,kArray(0)) match {
+            case (RInt(x),RInt(value)) => x=value
+            case (RString(b,l),RString(str,len)) => b=str; l=len
+          }
           kArray foreach {k => 
             if (k lessThan minkey) 
-              minkey = k match {
-                case RInt(value) => RInt(value)
-                case RString(b,l) => RString(b,l)
+              (minkey,k) match {
+                case (RInt(x),RInt(value)) => x=value
+                case (RString(b,l),RString(str,len)) => b=str; l=len
               }
-            else 
-              maxkey = k match {
-                case RInt(value) => RInt(value)
-                case RString(b,l) => RString(b,l)
+            if(maxkey lessThan k)
+              (maxkey,k) match {
+                case (RInt(x),RInt(value)) => x=value
+                case (RString(b,l),RString(str,len)) => b=str; l=len
               }
           }
         }
