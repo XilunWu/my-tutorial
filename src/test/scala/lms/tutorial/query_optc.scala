@@ -56,6 +56,7 @@ Low-Level Processing Logic
     def print()
     def compare(o: RField): Rep[Boolean]
     def hash: Rep[Long]
+    def lessThan(o :RField): Rep[Boolean]
   }
   //make data visilble outside RString.
   case class RString(val data: Rep[String], len: Rep[Int]) extends RField {
@@ -68,6 +69,13 @@ Low-Level Processing Logic
       }
       i == len
     }}
+    def lessThan(o: RField) = o match { case RString(data2, len2) => 
+      var i = 0
+      while (i < len && i < len2 && data.charAt(i) == data2.charAt(i)) i += 1
+      if (i == len2) false
+      else if(i == len) true
+      else data.charAt(i) < data2.charAt(i)
+    }
     def hash = data.HashCode(len)
   }
   //make value visilble outside RInt.
@@ -294,14 +302,14 @@ Data Structure Implementations
       else if (lv != 0 && cursor(lv) == indexArray(lv - 1)(cursor(lv - 1) + 1)) true
       else false
     }
-    def seek(level:Int, seekKey: Rep[String]): Rep[Unit] = {   //find the first of repetitions
+    def seek(level:Int, seekKey: RField): Rep[Unit] = {   //find the first of repetitions
       val lv:Int = levelOf(level)
       val start = cursor(lv)
       val end = if (lv == 0) lenArray(0) else indexArray(lv - 1)(cursor(lv - 1) + 1)
       //println("start = " + start + ", end = " + end)
       bsearch(lv, seekKey, start, end)
     }
-    def bsearch(lv:Int, seekKey: Rep[String], start: Rep[Int], end: Rep[Int]): Rep[Unit] = {
+    def bsearch(lv:Int, seekKey: RField, start: Rep[Int], end: Rep[Int]): Rep[Unit] = {
       //println("start = " + start + ", end = " + end)
       var vstart = start
       var vend = end
@@ -459,22 +467,18 @@ Data Structure Implementations
       */
   class LFTJmain (rels : List[TrieArray], schema: Schema){
     var currLv = 0
-    var lstLv = 0
-    var currCursor = 0  //change to Option[Rep[String]] after debug is done
-    val resCursor = NewArray[Int](schema.length)
+    val res = schema.map{
+      case hd if isNumericCol(hd) => RInt(0)
+      case _ => RString("",0)
+    }
     def run(yld: Record => Rep[Unit]) = {
       while (currLv != -1) {
-        lstLv = currLv
-        currCursor = unlift(leapFrogJoin)(currLv, schema.length) //return -1 if not found
-        if (currCursor != -1) {
-          pushIntoRes(currCursor)
-          if (lstLv == schema.length - 1) yld(makeRecord)
-        }
+        unlift(leapFrogJoin)(currLv, schema.length) //return -1 if not found
       }
     }
     //Can we write leapFrogJoin in a reversal style?
-    def leapFrogJoin(level: Int): Rep[Int] = {
-      val resultCursor = search(level)
+    def leapFrogJoin(level: Int): Rep[Unit] = {
+      search(level)
       /* need modification here. for each relation, the case is diff! */
       if (level == schema.length - 1) {
         if (atEnd(level)) {currLv -= 1; next(level-1)}
@@ -484,9 +488,12 @@ Data Structure Implementations
         if (atEnd(level)) {currLv -= 1; next(level-1)}
         else {currLv += 1; open(level+1)}
       }
-      resultCursor
+      if(!atEnd(level)) {
+        pushIntoRes(level, key(level))
+        if (level == schema.length - 1) yld(makeRecord)
+      }
     }
-    def unlift(f: Int => Rep[Int])(numUnLift: Rep[Int], upperBound: Int, lowerBound: Int = 0, count: Int = 0): Rep[Int] = {
+    def unlift(f: Int => Rep[Unit])(numUnLift: Rep[Int], upperBound: Int, lowerBound: Int = 0, count: Int = 0): Rep[Unit] = {
       if (numUnLift == count)
         f(count)
       else if (lowerBound <= count && count < upperBound - 1)
@@ -542,14 +549,13 @@ Data Structure Implementations
     def atEnd(level: Int): Rep[Boolean] = rels.filter(r => r.hasCol(level)).foldLeft(unit(false))((a, x) => a || x.atEnd(level))
     def open(level:Int): Rep[Unit] = rels.filter(r => r.hasCol(level)).foreach(r => r.open(level))
     def makeRecord: Record = {
-      //Record(res, schemaOfResult)
-      var i = -1;
-      val key = schema.map{x => {i += 1; 
-        res(i)}}
-      Record(key, schema)
+      Record(res, schema)
     }
-    def pushIntoRes(key: Rep[String]) = {
-      res.update(lstLv, key)
+    def pushIntoRes(level: Int, key: RField) = {
+      (res(level), key) match {
+        case (RInt(x), RInt(value)) => x = value
+        case (RString(b, l), RString(str, len)) => b = str; l = len
+      }
     }
   }
 }}

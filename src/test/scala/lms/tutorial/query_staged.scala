@@ -169,11 +169,8 @@ object query_staged {
         buf.map(b => b(i))
       }
       def +=(x: Seq[Rep[String]]) = {
-        this(len) = x
+        buf(len) = x
         len += 1
-      }
-      def update(i: Rep[Int], x: Seq[Rep[String]]) = {
-        (buf,x).zipped.foreach((b,x) => b(i) = x)
       }
       def output: Rep[Unit] = {
         var a = 0
@@ -455,9 +452,6 @@ object query_staged {
         var maxkey = ""
         var minkey = ""
         while({
-          rels.filter(r => r.hasCol(level)) foreach {r =>
-            //println("lv = " + r.levelOf(level) + ", key = " + r.key(level))
-          }
           maxkey = ""
           minkey = ""
           var flag = atEnd(level)
