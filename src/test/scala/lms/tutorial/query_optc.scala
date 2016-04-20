@@ -205,14 +205,8 @@ Data Structure Implementations
 */
   class TrieArray (dataSize: Int, schema: Schema, schemaOfResult: Schema) {
     var len = 0
-    val buf = schema.map {
-      case hd if isNumericCol(hd) => IntColBuffer(NewArray[Int](dataSize))
-      case _ => StringColBuffer(NewArray[String](dataSize), NewArray[Int](dataSize))
-    }
-    val valueArray = schema.map {
-      case hd if isNumericCol(hd) => IntColBuffer(NewArray[Int](dataSize))
-      case _ => StringColBuffer(NewArray[String](dataSize), NewArray[Int](dataSize))
-    }
+    val buf = new ArrayBuffer(dataSize, schema)
+    val valueArray = new ArrayBuffer(dataSize, schema)
     val indexArray = schema.map(f => NewArray[Int](dataSize))
     val lenArray = NewArray[Int](schema.length)
     //should be Vector[Boolean]?
@@ -220,27 +214,15 @@ Data Structure Implementations
     val levelTable = schema.map(f => schemaOfResult indexOf f)
     def hasCol(i: Int): Boolean = (i >= 0) && (i < schemaOfResult.length) && flagTable(i)
     def levelOf(i : Int): Int = levelTable indexOf i
-    def getRowData(data:Vector[ColBuffer], i:Rep[Int]) = data.map {
-      case IntColBuffer(b) => RInt(b(i))
-      case StringColBuffer(b,l) => RString(b(i),l(i))
-    }
-    def update(data: Vector[ColBuffer], i: Rep[Int], x: Fields) = (data,x).zipped.foreach {
-      case (IntColBuffer(b), RInt(x)) => b(i) = x
-      case (StringColBuffer(b,l), RString(x,y)) => b(i) = x; l(i) = y
-    }
-    def update(data: Vector[ColBuffer], i: Rep[Int], j: Int, x: RField) = (data(j), x) match {
-      case (RInt(x1), RInt(x2)) => x1 = x2
-      case (RString(b1,l1), RString(b2,l2)) => b1 = b2; l1 = l2
-    }
     def +=(x: Fields) = {
-      update(buf,len,x)
+      buf += x
       len += 1
     }
     def output: Rep[Unit] = {
       var a = 0
       while (a < len) {
-        buf foreach {line =>
-          line(a).print()
+        buf(a) foreach {line =>
+          line.print()
           print(" ")
         }
         print('\n')
@@ -260,9 +242,12 @@ Data Structure Implementations
         diff = false
         while (j < schema.length) {
           access[Unit](j, schema.length){j =>
-            val curr_value = getRowData(buf,i)(j)
+            val curr_value = buf(i)(j)  //Check generated code to see if this is compiled
             if (diff || !(lastRecord(j) compare curr_value)) {
-              update(valueArray, next(j), j, curr_value)
+              (valueArray(next(j))(j), curr_value) match {
+                case (RInt(x),RInt(value)) => x=value
+                case (RString(x,y), RString(s,l)) => x=s; y=l
+              }
               if (j != schema.length - 1)
                   indexArray(j)(next(j)) = next(j+1)
               (lastRecord(j),curr_value) match {
@@ -292,7 +277,7 @@ Data Structure Implementations
 
     def key(level:Int): RField = {
       val lv:Int = levelOf(level)
-      getRowData(valueArray, cursor(lv))(lv)
+      valueArray(cursor(lv))(lv)
     }
     def open(level:Int): Rep[Unit] = {
       val lv:Int = levelOf(level)
@@ -322,7 +307,7 @@ Data Structure Implementations
       var vend = end
       while(vstart != vend) {
         //Shall we transform it into access[Unit](){func}? This introduce more code. 
-        val pivot = getRowData(valueArray, (vstart + vend) / 2)(lv)
+        val pivot = valueArray((vstart + vend) / 2)(lv)
         if (pivot compare seekKey) {vstart = (vstart + vend) / 2; vend = vstart}
         else if (pivot lessThan seekKey) {vstart = (vstart + vend) / 2 + 1}
         else {vend = (vstart + vend) / 2}
@@ -475,7 +460,7 @@ Data Structure Implementations
   class LFTJmain (rels : List[TrieArray], schema: Schema){
     var currLv = 0
     var lstLv = 0
-    var currCursor = 0  //change to Some[Rep[String]] after debug is done
+    var currCursor = 0  //change to Option[Rep[String]] after debug is done
     val resCursor = NewArray[Int](schema.length)
     def run(yld: Record => Rep[Unit]) = {
       while (currLv != -1) {
@@ -559,7 +544,8 @@ Data Structure Implementations
     def makeRecord: Record = {
       //Record(res, schemaOfResult)
       var i = -1;
-      val key = schema.map{x => {i += 1; res(i)}}
+      val key = schema.map{x => {i += 1; 
+        res(i)}}
       Record(key, schema)
     }
     def pushIntoRes(key: Rep[String]) = {
