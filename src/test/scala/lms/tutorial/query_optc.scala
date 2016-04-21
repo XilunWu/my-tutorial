@@ -192,13 +192,16 @@ Query Interpretation = Compilation
       val dataSize = Vector(25+1,5+1,10000+1,150000+1,1500000+1,6001215+1)
       //val dataSize = Vector(25+1,5+1,10000+1,6+1,5+1,5+1)
       val schemaOfResult = resultSchema(LFTJoin(parents))
+      println("start Input")
       val trieArrays = (parents,dataSize).zipped.map { (p,size) =>
         val buf = new TrieArray(size, resultSchema(p), schemaOfResult)
         execOp(p) {rec => buf += rec.fields} //fields is of type Fields: Vector[RField]
         buf
       }
+      println("start building")
       trieArrays foreach {arr => arr.toTrieArray}
       val join = new LFTJmain(trieArrays, schemaOfResult)
+      println("finish buidling")
       join.run(yld)
     case PrintCSV(parent) =>
       val schema = resultSchema(parent)
@@ -532,7 +535,7 @@ Data Structure Implementations
       }
       while({
         var flag = atEnd(level)
-        if (flag == true) {false} 
+        if (flag == true) false
         else {
           val kArray = keys(level)
           (minkey,kArray(0)) match {
@@ -555,8 +558,8 @@ Data Structure Implementations
                 case (RString(b,l),RString(str,len)) => b=str; l=len
               }
           }
+          !(maxkey compare minkey)
         }
-        !(maxkey compare minkey)
       }) {
         rels.filter(r => r.hasCol(level)) foreach {r => r.seek(level, maxkey)}
       }

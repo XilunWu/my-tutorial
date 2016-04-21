@@ -80,7 +80,7 @@ class LFTjoinQueryTest extends TutorialFunSuite {
         }
         check(name, code, "c")
         //precompile
-        //checkOut(name, "csv", eval(defaultEvalTable))
+        checkOut(name, "csv", eval(defaultEvalTable))
       }
     }
   }
