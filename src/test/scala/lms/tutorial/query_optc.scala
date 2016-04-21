@@ -520,6 +520,7 @@ Data Structure Implementations
       //call iterator.next for every iterator in vector
       rels.filter(r => r.hasCol(level)) foreach {r => r.next(level)}
     }
+    //remap error in search(): AnyVal
     def search(level: Int): Rep[Unit] = {
       val maxkey = schema(level) match {
         case hd if isNumericCol(hd) => RInt(0)
