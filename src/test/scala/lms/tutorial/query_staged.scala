@@ -15,6 +15,21 @@ trait QueryCompiler extends Dsl with StagedQueryProcessor
 with ScannerBase {
   override def version = "query_staged"
 
+  //method to access element in Vector using Rep[Int] as subscript
+  def access(i: Rep[Int], len: Int)(f: Int => Rep[Unit]): Rep[Unit] = {
+    if(i >= len)
+      f(0)
+    else
+      accessHelp(i, len, 0)(f)
+  }
+  def accessHelp(i: Rep[Int], len: Int, count: Int)(f: Int => Rep[Unit]): Rep[Unit] = {
+    if (i == count)
+      f(count)
+    else if (count < len - 1)
+      accessHelp(i, len, count + 1)(f)
+    else
+      f(len-1)
+  }
 /**
 Low-Level Processing Logic
 --------------------------
@@ -69,6 +84,10 @@ Query Interpretation = Compilation
     case Group(keys, agg, parent)=> keys ++ agg
     case HashJoin(left, right)   => resultSchema(left) ++ resultSchema(right)
     case PrintCSV(parent)        => Schema()
+    //Only for test
+    case LFTJoin(parents)        =>
+      val schema = Schema("ORDERKEY","CUSTKEY","PARTKEY","SUPPKEY","NATIONKEY","REGIONKEY")
+      schema
   }
 
   def execOp(o: Operator)(yld: Record => Rep[Unit]): Rep[Unit] = o match {
@@ -105,6 +124,20 @@ Query Interpretation = Compilation
           yld(Record(rec1.fields ++ rec2.fields, rec1.schema ++ rec2.schema))
         }
       }
+    case LFTJoin(parents) =>
+      //build TrieArrays
+      val dataSize = Vector(25+1,5+1,10000+1,150000+1,1500000+1,6001215+1)
+      //val dataSize = Vector(25+1,5+1,10000+1,6+1,5+1,5+1)
+      val schemaOfResult = resultSchema(LFTJoin(parents))
+      val trieArrays = (parents,dataSize).zipped.map { (p,size) =>
+        val buf = new TrieArray(size, resultSchema(p), schemaOfResult)
+        execOp(p) {rec => buf += rec.fields}
+        buf
+      }
+      //        trieArrays foreach {arr => arr.output}
+      trieArrays foreach {arr => arr.toTrieArray}
+      val join = new LFTJmain(trieArrays, schemaOfResult)
+      join.run(yld)
     case PrintCSV(parent) =>
       val schema = resultSchema(parent)
       printSchema(schema)
@@ -116,6 +149,126 @@ Query Interpretation = Compilation
 Data Structure Implementations
 ------------------------------
 */
+  class TrieArray (dataSize: Int, schema: Schema, schemaOfResult: Schema) {
+    var len = 0
+    val buf = schema.map(f => NewArray[String](dataSize))
+    val valueArray = schema.map(f => NewArray[String](dataSize))
+    val indexArray = schema.map(f => NewArray[Int](dataSize))
+    val lenArray = NewArray[Int](schema.length)
+    //should be Vector[Boolean]?
+    val flagTable = schemaOfResult.map(f => schema contains f)
+    val levelTable = schema.map(f => schemaOfResult indexOf f)
+    def hasCol(i: Int): Boolean = (i >= 0) && (i < schemaOfResult.length) && flagTable(i)
+    def levelOf(i : Int): Int = levelTable indexOf i
+    def apply(i: Rep[Int]) = {
+      buf.map(b => b(i))
+    }
+    def +=(x: Seq[Rep[String]]) = {
+      (buf,x).zipped.foreach((b,x) => b(len) = x)
+      len += 1
+    }
+    def output: Rep[Unit] = {
+      var a = 0
+      while (a < len) {
+        buf foreach {line =>
+          print(line(a) + " ")
+        }
+        print('\n')
+        a += 1
+      }
+    }
+
+    def toTrieArray: Rep[Unit] = {
+      //generate indexArray
+      val lastRecord = NewArray[String](schema.length)
+      lastRecord.foreach(x => x = "")
+      val next = NewArray[Int](schema.length)
+      var i = 0; var j = 0
+      var diff = false
+      while(i < len) {
+        diff = false
+        while (j < schema.length) {
+          access(j, schema.length){j =>
+            val curr_value = buf(j)(i)
+            if (diff || lastRecord(j) != curr_value) {
+              valueArray(j)(next(j)) = curr_value
+              if (j != schema.length - 1)
+                indexArray(j)(next(j)) = next(j + 1)
+              lastRecord(j) = curr_value
+              next(j) = next(j) + 1
+              diff = true
+            }
+          }
+          j += 1
+        }
+        i += 1
+        j = 0
+      }
+      //for the last row
+      while (j < schema.length - 1) {
+        access(j, schema.length) { j =>
+          indexArray(j)(next(j)) = next(j+1)
+        }
+        lenArray(j) = next(j)
+        j += 1
+      }
+      lenArray(j) = next(j)
+    }
+    val cursor = NewArray[Int](schema.length)
+
+    def key(level:Int): Rep[String] = {
+      if (hasCol(level)){
+        val lv:Int = levelOf(level)
+        valueArray(lv)(cursor(lv))
+      }
+      else ""
+    }
+    def open(level:Int): Rep[Unit] = {
+      if (hasCol(level)){
+        val lv:Int = levelOf(level)
+        if (lv == 0) cursor(lv) = 0
+        else cursor(lv) = indexArray(lv-1)(cursor(lv-1))
+      }
+    }
+    def next(level:Int): Rep[Unit] = {
+      if (hasCol(level)){
+        val lv:Int = levelOf(level)
+        cursor(lv) = cursor(lv) + 1
+      }
+    }
+    def atEnd(level:Int): Rep[Boolean] = {
+      if (!hasCol(level)) false
+      else {
+        val lv:Int = levelOf(level)
+        if (lv == 0 && cursor(lv) == lenArray(lv)) true
+        else if (lv != 0 && cursor(lv) == indexArray(lv - 1)(cursor(lv - 1) + 1)) true
+        else false
+      }
+    }
+    def seek(level:Int, seekKey: Rep[String]): Rep[Unit] = {   //find the first of repetitions
+      //println("searchKey = " + seekKey)
+      if (hasCol(level)) {
+        val lv:Int = levelOf(level)
+        val start = cursor(lv)
+        val end = if (lv == 0) lenArray(0) else indexArray(lv - 1)(cursor(lv - 1) + 1)
+        //println("start = " + start + ", end = " + end)
+        bsearch(lv, seekKey, start, end)
+      }
+    }
+    def bsearch(lv:Int, seekKey: Rep[String], start: Rep[Int], end: Rep[Int]): Rep[Unit] = {
+      //println("start = " + start + ", end = " + end)
+      var vstart = start
+      var vend = end
+      while(vstart != vend) {
+        //Shall we transform it into access[Unit](){func}? This introduce more code. 
+        val pivot = valueArray(lv)((vstart + vend) / 2)
+        if (pivot == seekKey) {vstart = (vstart + vend) / 2; vend = vstart}
+        else if (pivot < seekKey) {vstart = (vstart + vend) / 2 + 1}
+        else {vend = (vstart + vend) / 2}
+      }
+      cursor(lv) = vstart
+    }
+  }
 
   // defaults for hash sizes etc
 
@@ -238,6 +391,98 @@ Data Structure Implementations
     }
     def apply(i: Rep[Int]) = {
       buf.map(b => b(i))
+    }
+  }
+
+/**
+Trie-Join
+--------------------------
+*/
+  class LFTJmain (rels : List[TrieArray], schema: Schema){
+    var currLv = 0
+    var lstLv = 0
+    var currKey = ""  //change to Some[Rep[String]] after debug is done
+    val res = NewArray[String](schema.length)
+    def run(yld: Record => Rep[Unit]) = {
+      while (currLv != -1) {
+        lstLv = currLv
+        currKey = unlift(leapFrogJoin)(currLv, schema.length)
+        //println("level = " + lstLv + ", key = " + currKey)
+        if (currKey != "") {
+          pushIntoRes(currKey)
+          if (lstLv == schema.length - 1) yld(makeRecord)
+        }
+      }
+    }
+    //Can we write leapFrogJoin in a reversal style?
+    def leapFrogJoin(level: Int): Rep[String] = {
+      search(level)
+      //println("key = " + key(level))
+      val resultKey = key(level)
+      /* need modification here. for each relation, the case is diff! */
+      if (level == schema.length - 1) {
+        if (atEnd(level)) {currLv -= 1; next(level-1)}
+        else next(level)
+      }
+      else {
+        if (atEnd(level)) {currLv -= 1; next(level-1)}
+        else {currLv += 1; open(level+1)}
+      }
+      resultKey
+    }
+    def unlift(f: Int => Rep[String])(numUnLift: Rep[Int], upperBound: Int, lowerBound: Int = 0, count: Int = 0): Rep[String] = {
+      if (numUnLift == count)
+        f(count)
+      else if (lowerBound <= count && count < upperBound - 1)
+        unlift(f)(numUnLift, upperBound, lowerBound, count + 1)
+      else
+        f(upperBound - 1)
+    }
+    //check atEnd after calling next()
+    def next(level: Int): Rep[Unit] = {
+      //call iterator.next for every iterator in vector
+      rels.filter(r => r.hasCol(level)) foreach {r => r.next(level)}
+    }
+    def search(level: Int): Rep[Unit] = {
+      var maxkey = ""
+      var minkey = ""
+      while({
+        maxkey = ""
+        minkey = ""
+        var flag = atEnd(level)
+        if (flag == true) false
+        else {
+          val kArray = keys(level)
+          minkey = kArray(0)
+          kArray foreach {k => 
+            if (k > maxkey) maxkey = k
+            if (k < minkey) minkey = k
+          }
+          maxkey != minkey
+        }
+      }) {
+        rels.filter(r => r.hasCol(level)) foreach {r => r.seek(level, maxkey)}
+      }
+      //println("LV: " + currLv + ", key = " + maxkey)
+    }
+    def key(level: Int): Rep[String] = {
+      if(!atEnd(level)) keys(level)(0)
+      else ""
+    }
+    def keys(level: Int): List[Rep[String]] = {
+      val array = rels.filter(r => r.hasCol(level)).map{r => r.key(level)}
+      array
+    }
+    def atEnd(level: Int): Rep[Boolean] = rels.filter(r => r.hasCol(level)).foldLeft(unit(false))((a, x) => a || x.atEnd(level))
+    def open(level:Int): Rep[Unit] = rels.filter(r => r.hasCol(level)).foreach(r => r.open(level))
+    def makeRecord: Record = {
+      //Record(res, schemaOfResult)
+      var i = -1;
+      val key = schema.map{x => {i += 1; res(i)}}
+      Record(key, schema)
+    }
+    def pushIntoRes(key: Rep[String]) = {
+      res.update(lstLv, key)
     }
   }
 }}
