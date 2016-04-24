@@ -37,7 +37,7 @@ trait TutorialFunSuite extends LibSuite {
   def checkOut(label: String, suffix: String, thunk: => Unit) = {
     val output = new ByteArrayOutputStream()
     scala.Console.setOut(new PrintStream(output))
-    thunk
+    utils.time(thunk)
     check(label, output.toString(), suffix = suffix)
   }
   def check(label: String, raw_code: String, suffix: String = "scala") = {

@@ -86,7 +86,14 @@ Query Interpretation = Compilation
     case PrintCSV(parent)        => Schema()
     //Only for test
     case LFTJoin(parents)        =>
-      val schema = Schema("ORDERKEY","CUSTKEY","PARTKEY","SUPPKEY","NATIONKEY","REGIONKEY")
+      val schema = Schema("ORDERKEY","CUSTKEY","PARTKEY","SUPPKEY","NATIONKEY","REGIONKEY",
+        "C_NAME","C_ADDRESS","PHONE","ACCTBAL","MKTSEGMENT","C_COMMENT",
+        "N_NAME", "N_COMMENT",
+        "R_NAME","R_COMMENT",
+        "LINENUMBER","QUANTITY","EXTENDEDPRICE","DISCOUNT","TAX","RETURNFLAG","LINESTATUS","SHIPDATE","COMMITDATE","RECEIPTDATE","SHIPINSTRUCT","SHIPMODE","L_COMMENT",
+        "ORDERSTATUS","TOTALPRICE","ORDERDATE","ORDERPRIORITY","CLERK","SHIPPRIORITY","O_COMMENT",
+        "S_NAME","S_ADDRESS","S_PHONE","S_ACCTBAL","S_COMMENT"
+        )
       schema
   }
 
@@ -127,7 +134,6 @@ Query Interpretation = Compilation
     case LFTJoin(parents) =>
       //build TrieArrays
       val dataSize = Vector(25+1,5+1,10000+1,150000+1,1500000+1,6001215+1)
-      //val dataSize = Vector(25+1,5+1,10000+1,6+1,5+1,5+1)
       val schemaOfResult = resultSchema(LFTJoin(parents))
       val trieArrays = (parents,dataSize).zipped.map { (p,size) =>
         val buf = new TrieArray(size, resultSchema(p), schemaOfResult)
