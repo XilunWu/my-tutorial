@@ -86,13 +86,17 @@ Query Interpretation = Compilation
     case PrintCSV(parent)        => Schema()
     //Only for test
     case LFTJoin(parents)        =>
-      val schema = Schema("ORDERKEY","CUSTKEY","PARTKEY","SUPPKEY","NATIONKEY","REGIONKEY",
-        "C_NAME","C_ADDRESS","PHONE","ACCTBAL","MKTSEGMENT","C_COMMENT",
-        "N_NAME", "N_COMMENT",
+      val schema = Schema("#ORDERKEY","#CUSTKEY","#PARTKEY","#SUPPKEY",
+        //"C_NAME","C_ADDRESS",
+        "#NATIONKEY",
+        //"N_NAME",
+        "#REGIONKEY"/*,
+        "PHONE","ACCTBAL","MKTSEGMENT","C_COMMENT",
+        "N_COMMENT",
         "R_NAME","R_COMMENT",
         "LINENUMBER","QUANTITY","EXTENDEDPRICE","DISCOUNT","TAX","RETURNFLAG","LINESTATUS","SHIPDATE","COMMITDATE","RECEIPTDATE","SHIPINSTRUCT","SHIPMODE","L_COMMENT",
         "ORDERSTATUS","TOTALPRICE","ORDERDATE","ORDERPRIORITY","CLERK","SHIPPRIORITY","O_COMMENT",
-        "S_NAME","S_ADDRESS","S_PHONE","S_ACCTBAL","S_COMMENT"
+        "S_NAME","S_ADDRESS","S_PHONE","S_ACCTBAL","S_COMMENT"*/
         )
       schema
   }
