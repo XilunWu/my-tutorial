@@ -153,8 +153,19 @@ Query Interpretation = Compilation
     case HashJoin(left, right)   => resultSchema(left) ++ resultSchema(right)
     case PrintCSV(parent)        => Schema()
     case LFTJoin(parents)        =>
-        val schema = Schema("#ORDERKEY","#CUSTKEY","#PARTKEY","#SUPPKEY","#NATIONKEY","#REGIONKEY")
-        schema
+      val schema = Schema("#ORDERKEY","#CUSTKEY","#PARTKEY","#SUPPKEY",
+        //"C_NAME","C_ADDRESS",
+        "#NATIONKEY",
+        "N_NAME",
+        "#REGIONKEY"/*,
+        "PHONE","ACCTBAL","MKTSEGMENT","C_COMMENT",
+        "N_COMMENT",
+        "R_NAME","R_COMMENT",
+        "#LINENUMBER","#QUANTITY","EXTENDEDPRICE","DISCOUNT","TAX","RETURNFLAG","LINESTATUS","SHIPDATE","COMMITDATE","RECEIPTDATE","SHIPINSTRUCT","SHIPMODE","L_COMMENT",
+        "ORDERSTATUS","TOTALPRICE","ORDERDATE","ORDERPRIORITY","CLERK","#SHIPPRIORITY","O_COMMENT",
+        "S_NAME","S_ADDRESS","S_PHONE","S_ACCTBAL","S_COMMENT"*/
+        )
+      schema
   }
 
   def execOp(o: Operator)(yld: Record => Rep[Unit]): Rep[Unit] = o match {
