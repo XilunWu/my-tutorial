@@ -506,7 +506,7 @@ Data Structure Implementations
       /* need modification here. for each relation, the case is diff! */
       if (level == schema.length - 1) {
         if (atEnd(level)) {currLv -= 1; next(level-1)}
-        else {next(level); pushIntoRes(level, key(level)); yld(makeRecord)}
+        else {pushIntoRes(level, key(level)); next(level); yld(makeRecord)}
       }
       else {
         if (atEnd(level)) {currLv -= 1; next(level-1)}
