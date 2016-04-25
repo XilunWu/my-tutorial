@@ -57,6 +57,7 @@ Low-Level Processing Logic
     def compare(o: RField): Rep[Boolean]
     def hash: Rep[Long]
     def lessThan(o :RField): Rep[Boolean]
+    //def update(o: RField)
   }
   //make data visilble outside RString.
   case class RString(val data: Rep[String], len: Rep[Int]) extends RField {
@@ -77,6 +78,7 @@ Low-Level Processing Logic
       else data.charAt(i) < data2.charAt(i)
     }
     def hash = data.HashCode(len)
+    //def update(o: RField) = o match { case RString(data2, len2) => data = data2; len = len2}
   }
   //make value visilble outside RInt.
   case class RInt(val value: Rep[Int]) extends RField {
@@ -84,6 +86,7 @@ Low-Level Processing Logic
     def compare(o: RField) = o match { case RInt(v2) => value == v2 }
     def lessThan(o: RField) = o match { case RInt(v2) =>  value < v2 }
     def hash = value.asInstanceOf[Rep[Long]]
+    //def update(o: RField) = o match { case RInt(v2) => value = v2}
   }
 
   type Fields = Vector[RField]
@@ -202,7 +205,7 @@ Query Interpretation = Compilation
       trieArrays foreach {arr => arr.toTrieArray}
       val join = new LFTJmain(trieArrays, schemaOfResult)
       println("finish buidling")
-      join.run(yld)
+      //join.run(yld)
     case PrintCSV(parent) =>
       val schema = resultSchema(parent)
       printSchema(schema)
@@ -250,14 +253,14 @@ Data Structure Implementations
           line.print()
           print(" ")
         }
-        print('\n')
+        println("")
         a += 1
       }
     }
     def toTrieArray: Rep[Unit] = {
       //generate indexArray
       val lastRecord = schema.map {
-        case hd if isNumericCol(hd) => RInt(0)
+        case hd if isNumericCol(hd) => RInt(-1)
         case _ => RString("",0)
       }
       val next = NewArray[Int](schema.length)
@@ -267,12 +270,26 @@ Data Structure Implementations
         diff = false
         while (j < schema.length) {
           access(j, schema.length){j =>
-            val curr_value = buf(i)(j)  //Check generated code to see if this is compiled
+            val curr_value = buf(i)(j)
+            //curr_value.print()
+            //print("|")
             if (diff || !(lastRecord(j) compare curr_value)) {
+              println("heyhey")
+              curr_value.print()
+              curr_value match {
+                case RInt(value) => valueArray(next(j))(j) match {
+                  case RInt(x) => println("hey!")
+                                  println(value)
+                                  x = value
+                }
+              }
+              valueArray(next(j))(j).print
+              /*
               (valueArray(next(j))(j), curr_value) match {
                 case (RInt(x),RInt(value)) => x=value
                 case (RString(x,y), RString(s,l)) => x=s; y=l
               }
+              */
               if (j != schema.length - 1)
                   indexArray(j)(next(j)) = next(j+1)
               (lastRecord(j),curr_value) match {
@@ -285,8 +302,11 @@ Data Structure Implementations
           }
           j += 1
         }
+        //print("line ")
+        //println(i)
         i += 1
         j = 0
+        //lastRecord foreach {r => r.print}
       }
       //for the last row
       while (j < schema.length - 1) {
@@ -493,7 +513,7 @@ Data Structure Implementations
       while (currLv != -1) {
         lstLv = currLv
         unlift(leapFrogJoin)(currLv, schema.length) //return -1 if not found
-        if (lstLv == schema.length - 1) yld(makeRecord)
+//        if (lstLv == schema.length - 1) yld(makeRecord)
       }
     }
     //Can we write leapFrogJoin in a reversal style?

@@ -80,7 +80,7 @@ class LFTjoinQueryTest extends TutorialFunSuite {
         }
         check(name, code, "c")
         //precompile
-        checkOut(name, "csv", eval(defaultEvalTable))
+        //checkOut(name, "csv", eval(defaultEvalTable))
       }
     }
   }
@@ -118,7 +118,7 @@ class LFTjoinQueryTest extends TutorialFunSuite {
     val scan_region = Scan("region.csv",Some(Schema("#REGIONKEY")),Some('\t'))
     val scan_lineitem = Scan("lineitem.csv",Some(Schema("#ORDERKEY","#PARTKEY","#SUPPKEY")),Some('\t'))
     val scan_orders = Scan("orders.csv",Some(Schema("#ORDERKEY","#CUSTKEY")),Some('\t'))
-    val scan_supplier = Scan("supplier.csv",Some(Schema("#SUPPKEY")),Some('\t'))
+    val scan_supplier = Scan("supplier.csv",Some(Schema("#SUPPKEY","#NATIONKEY")),Some('\t'))
   
     val expectedAstForTest = Map(
       "lftj_q5" -> LFTJoin(List(scan_nation, scan_region, scan_supplier, scan_customer, scan_orders, scan_lineitem))
