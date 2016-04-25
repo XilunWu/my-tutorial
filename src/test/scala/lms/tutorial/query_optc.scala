@@ -277,13 +277,10 @@ Data Structure Implementations
               println("heyhey")
               curr_value.print()
               curr_value match {
-                case RInt(value) => valueArray(next(j))(j) match {
-                  case RInt(x) => println("hey!")
-                                  println(value)
-                                  x = value
-                }
+                case RInt(value) => value = i
               }
-              valueArray(next(j))(j).print
+              curr_value.print
+              println("")
               /*
               (valueArray(next(j))(j), curr_value) match {
                 case (RInt(x),RInt(value)) => x=value
