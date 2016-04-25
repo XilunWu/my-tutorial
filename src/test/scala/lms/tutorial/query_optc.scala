@@ -195,17 +195,17 @@ Query Interpretation = Compilation
       val dataSize = Vector(25+1,5+1,10000+1,150000+1,1500000+1,6001215+1)
       //val dataSize = Vector(25+1,5+1,10000+1,6+1,5+1,5+1)
       val schemaOfResult = resultSchema(LFTJoin(parents))
-      println("start Input")
+      //println("start Input")
       val trieArrays = (parents,dataSize).zipped.map { (p,size) =>
         val buf = new TrieArray(size, resultSchema(p), schemaOfResult)
         execOp(p) {rec => buf += rec.fields} //fields is of type Fields: Vector[RField]
         buf
       }
-      println("start building")
+      //println("start building")
       trieArrays foreach {arr => arr.toTrieArray}
       val join = new LFTJmain(trieArrays, schemaOfResult)
-      println("finish buidling")
-      //join.run(yld)
+      //println("finish buidling")
+      join.run(yld)
     case PrintCSV(parent) =>
       val schema = resultSchema(parent)
       printSchema(schema)
@@ -259,10 +259,11 @@ Data Structure Implementations
     }
     def toTrieArray: Rep[Unit] = {
       //generate indexArray
-      val lastRecord = schema.map {
+      val lastRecord = new ArrayBuffer(1,schema)
+      lastRecord.update(0,schema.map{
         case hd if isNumericCol(hd) => RInt(-1)
         case _ => RString("",0)
-      }
+        })
       val next = NewArray[Int](schema.length)
       var i = 0; var j = 0
       var diff = false
@@ -273,26 +274,11 @@ Data Structure Implementations
             val curr_value = buf(i)(j)
             //curr_value.print()
             //print("|")
-            if (diff || !(lastRecord(j) compare curr_value)) {
-              println("heyhey")
-              curr_value.print()
-              curr_value match {
-                case RInt(value) => value = i
-              }
-              curr_value.print
-              println("")
-              /*
-              (valueArray(next(j))(j), curr_value) match {
-                case (RInt(x),RInt(value)) => x=value
-                case (RString(x,y), RString(s,l)) => x=s; y=l
-              }
-              */
+            if (diff || !(lastRecord(0)(j) compare curr_value)) {
+              valueArray.update(next(j), j, curr_value)
               if (j != schema.length - 1)
                   indexArray(j)(next(j)) = next(j+1)
-              (lastRecord(j),curr_value) match {
-                case (RInt(x1), RInt(x2)) => x1 = x2
-                case (RString(b1,l1), RString(b2,l2)) => b1 = b2; l1 = l2
-              }
+              lastRecord.update(0,j,curr_value)
               next(j) = next(j) + 1
               diff = true
             }
@@ -303,7 +289,8 @@ Data Structure Implementations
         //println(i)
         i += 1
         j = 0
-        //lastRecord foreach {r => r.print}
+        //lastRecord(0) foreach {r => r.print}
+        //println("")
       }
       //for the last row
       while (j < schema.length - 1) {
@@ -489,6 +476,10 @@ Data Structure Implementations
       case (IntColBuffer(b), RInt(x)) => b(i) = x
       case (StringColBuffer(b,l), RString(x,y)) => b(i) = x; l(i) = y
     }
+    def update(i: Rep[Int], j: Int, x: RField) = (buf(j),x) match {
+      case (IntColBuffer(b), RInt(x)) => b(i) = x
+      case (StringColBuffer(b,l), RString(x,y)) => b(i) = x; l(i) = y
+    }
     def apply(i: Rep[Int]) = buf.map {
       case IntColBuffer(b) => RInt(b(i))
       case StringColBuffer(b,l) => RString(b(i),l(i))
@@ -500,85 +491,60 @@ Data Structure Implementations
       --------------------------
       */
   class LFTJmain (rels : List[TrieArray], schema: Schema){
+    val maxkeys = new ArrayBuffer(1, schema)
+    val minkeys = new ArrayBuffer(1, schema)
     var currLv = 0
-    var lstLv = 0
-    val res = schema.map{
-      case hd if isNumericCol(hd) => RInt(0)
-      case _ => RString("",0)
-    }
+    val res = new ArrayBuffer(1, schema)
     def run(yld: Record => Rep[Unit]) = {
       while (currLv != -1) {
-        lstLv = currLv
-        unlift(leapFrogJoin)(currLv, schema.length) //return -1 if not found
-//        if (lstLv == schema.length - 1) yld(makeRecord)
+        unlift(leapFrogJoin)(yld, currLv, schema.length) //return -1 if not found
       }
     }
     //Can we write leapFrogJoin in a reversal style?
-    def leapFrogJoin(level: Int): Rep[Unit] = {
+    def leapFrogJoin(level: Int, yld: Record => Rep[Unit]): Rep[Unit] = {
       search(level)
       /* need modification here. for each relation, the case is diff! */
       if (level == schema.length - 1) {
         if (atEnd(level)) {currLv -= 1; next(level-1)}
-        else next(level)
+        else {next(level); pushIntoRes(level, key(level)); yld(makeRecord)}
       }
       else {
         if (atEnd(level)) {currLv -= 1; next(level-1)}
-        else {currLv += 1; open(level+1)}
+        else {pushIntoRes(level, key(level)); currLv += 1; open(level+1)}
       }
-      if(!atEnd(level)) pushIntoRes(level, key(level))
     }
-    def unlift(f: Int => Rep[Unit])(numUnLift: Rep[Int], upperBound: Int, lowerBound: Int = 0, count: Int = 0): Rep[Unit] = {
+    def unlift(f: (Int, Record => Rep[Unit]) => Rep[Unit])(yld: Record => Rep[Unit], numUnLift: Rep[Int], upperBound: Int, lowerBound: Int = 0, count: Int = 0): Rep[Unit] = {
       if (numUnLift == count)
-        f(count)
+        f(count,yld)
       else if (lowerBound <= count && count < upperBound - 1)
-        unlift(f)(numUnLift, upperBound, lowerBound, count + 1)
+        unlift(f)(yld, numUnLift, upperBound, lowerBound, count + 1)
       else
-        f(upperBound - 1)
+        f(upperBound - 1, yld)
     }
     //check atEnd after calling next()
     def next(level: Int): Rep[Unit] = {
       //call iterator.next for every iterator in vector
       rels.filter(r => r.hasCol(level)) foreach {r => r.next(level)}
     }
-    //remap error in search(): AnyVal
     def search(level: Int): Rep[Unit] = {
-      val maxkey = schema(level) match {
-        case hd if isNumericCol(hd) => RInt(0)
-        case _ => RString("",0)
-      }
-      val minkey = schema(level) match {
-        case hd if isNumericCol(hd) => RInt(0)
-        case _ => RString("",0)
-      }
+      //maxkeys and minkeys should be ArrayBuffer(1,schema)
       while({
         var flag = atEnd(level)
         if (flag == true) false
         else {
           val kArray = keys(level)
-          (minkey,kArray(0)) match {
-            case (RInt(x),RInt(value)) => x=value
-            case (RString(b,l),RString(str,len)) => b=str; l=len
-          }
-          (maxkey,kArray(0)) match {
-            case (RInt(x),RInt(value)) => x=value
-            case (RString(b,l),RString(str,len)) => b=str; l=len
-          }
+          minkeys.update(0, level, kArray(0))
+          maxkeys.update(0, level, kArray(0))
           kArray foreach {k => 
-            if (k lessThan minkey) 
-              (minkey,k) match {
-                case (RInt(x),RInt(value)) => x=value
-                case (RString(b,l),RString(str,len)) => b=str; l=len
-              }
-            if(maxkey lessThan k)
-              (maxkey,k) match {
-                case (RInt(x),RInt(value)) => x=value
-                case (RString(b,l),RString(str,len)) => b=str; l=len
-              }
+            if (k lessThan minkeys(0)(level))
+              minkeys.update(0,level,k)
+            if(maxkeys(0)(level) lessThan k)              
+              maxkeys.update(0,level,k)
           }
-          !(maxkey compare minkey)
+          !(maxkeys(0)(level) compare minkeys(0)(level))
         }
       }) {
-        rels.filter(r => r.hasCol(level)) foreach {r => r.seek(level, maxkey)}
+        rels.filter(r => r.hasCol(level)) foreach {r => r.seek(level, maxkeys(0)(level))}
       }
       //println("LV: " + currLv + ", key = " + maxkey)
     }
@@ -590,13 +556,10 @@ Data Structure Implementations
     def atEnd(level: Int): Rep[Boolean] = rels.filter(r => r.hasCol(level)).foldLeft(unit(false))((a, x) => a || x.atEnd(level))
     def open(level:Int): Rep[Unit] = rels.filter(r => r.hasCol(level)).foreach(r => r.open(level))
     def makeRecord: Record = {
-      Record(res, schema)
+      Record(res(0), schema)
     }
     def pushIntoRes(level: Int, key: RField) = {
-      (res(level), key) match {
-        case (RInt(x), RInt(value)) => x = value
-        case (RString(b, l), RString(str, len)) => b = str; l = len
-      }
+      res.update(0,level,key)
     }
   }
 }}
