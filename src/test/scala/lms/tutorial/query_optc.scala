@@ -136,6 +136,8 @@ Query Interpretation = Compilation
 */
   def evalPred(p: Predicate)(rec: Record): Rep[Boolean] = p match {
     case Eq(a1, a2) => evalRef(a1)(rec) compare evalRef(a2)(rec)
+    //Add predicate LessThan!
+    //case LT(a1, a2) => evalRef(a1)(rec) lessThan evalRef(a2)(rec)
   }
 
   def evalRef(r: Ref)(rec: Record): RField = r match {
