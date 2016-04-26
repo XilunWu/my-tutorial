@@ -88,6 +88,8 @@ trait QueryAST {
   // filter predicates
   sealed abstract class Predicate
   case class Eq(a: Ref, b: Ref) extends Predicate
+  case class LT(a: Ref, b: Ref) extends Predicate
+  case class GTE(a: Ref, b: Ref) extends Predicate
 
   sealed abstract class Ref
   case class Field(name: String) extends Ref
