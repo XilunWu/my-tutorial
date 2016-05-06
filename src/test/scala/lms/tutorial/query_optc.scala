@@ -191,7 +191,8 @@ Query Interpretation = Compilation
     case Group(keys, agg, parent) =>
       val hm = new HashMapAgg(keys, agg)
       execOp(parent) { rec =>
-        hm(rec(keys)) += rec(agg)
+        if (agg(0) == "#COUNT") hm(rec(keys)) += Vector[RField](RInt(1))
+        else hm(rec(keys)) += rec(agg)
       }
       hm foreach { (k,a) =>
         yld(Record(k ++ a, keys ++ agg))
@@ -239,7 +240,7 @@ Query Interpretation = Compilation
 Data Structure Implementations
 ------------------------------
 */
- def access(i: Rep[Int], len: Int)(f: Int => Rep[Unit]): Rep[Unit] = {
+  def access(i: Rep[Int], len: Int)(f: Int => Rep[Unit]): Rep[Unit] = {
     if(i >= len)
       f(0)
     else
@@ -430,7 +431,6 @@ Data Structure Implementations
         values(keyPos) = (values(keyPos) zip v) map { case (RInt(x), RInt(y)) => RInt(x + y) }
       }
     }
-
     def foreach(f: (Fields,Fields) => Rep[Unit]): Rep[Unit] = {
       for (i <- 0 until keyCount) {
         f(keys(i),values(i))
