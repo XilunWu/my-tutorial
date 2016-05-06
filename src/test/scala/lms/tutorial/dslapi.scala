@@ -218,6 +218,7 @@ trait DslGenC extends CGenNumericOps
       #include <stdio.h>
       #include <stdint.h>
       #include <unistd.h>
+      #include <time.h>
       #ifndef MAP_FILE
       #define MAP_FILE MAP_SHARED
       #endif

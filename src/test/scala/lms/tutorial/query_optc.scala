@@ -37,7 +37,9 @@ Input File Tokenizer
       val start = pos: Rep[Int] // force read
       var num = 0
       while (data(pos) != d) {
-        num = num * 10 + (data(pos) - '0').toInt
+        //If date format, transfer it to Int
+        if (data(pos) != '-')
+          num = num * 10 + (data(pos) - '0').toInt
         pos += 1
       }
       pos += 1
@@ -207,19 +209,25 @@ Query Interpretation = Compilation
       }
     case LFTJoin(parents) =>
       val dataSize = Vector(25+1,5+1,10000+1,150000+1,1500000+1,6001215+1)
-      //val dataSize = Vector(25+1,5+1,10000+1,6+1,5+1,5+1)
       val schemaOfResult = resultSchema(LFTJoin(parents))
-      //println("start Input")
+      //Measure data loading and preprocessing time
+      unchecked[Unit]("clock_t begin, end; double time_spent")
+      unchecked[Unit]("begin = clock()")
       val trieArrays = (parents,dataSize).zipped.map { (p,size) =>
         val buf = new TrieArray(size, resultSchema(p), schemaOfResult)
         execOp(p) {rec => buf += rec.fields} //fields is of type Fields: Vector[RField]
         buf
       }
-      //println("start building")
+      unchecked[Unit]("end = clock(); printf(\"Data loading: %f\\n\", (double)(end - begin) / CLOCKS_PER_SEC)")
+      //Measure trie building time
+      unchecked[Unit]("begin = clock()")
       trieArrays foreach {arr => arr.toTrieArray}
       val join = new LFTJmain(trieArrays, schemaOfResult)
-      //println("finish buidling")
+      unchecked[Unit]("end = clock(); printf(\"Trie building: %f\\n\", (double)(end - begin) / CLOCKS_PER_SEC)")
+      //Measure join time
+      unchecked[Unit]("begin = clock()")
       join.run(yld)
+      unchecked[Unit]("end = clock(); printf(\"Join: %f\\n\", (double)(end - begin) / CLOCKS_PER_SEC)")
     case PrintCSV(parent) =>
       val schema = resultSchema(parent)
       printSchema(schema)

@@ -108,8 +108,8 @@ class LFTjoinQueryTest extends TutorialFunSuite {
     val scan_customer = Scan("customer.csv",Some(Schema("#CUSTKEY","C_NAME","C_ADDRESS","#NATIONKEY","PHONE","ACCTBAL","MKTSEGMENT","C_COMMENT")),Some('\t'))
     val scan_nation = Scan("nation.csv",Some(Schema("#NATIONKEY","N_NAME","#REGIONKEY","N_COMMENT")),Some('\t'))
     val scan_region = Scan("region.csv",Some(Schema("#REGIONKEY","R_NAME","R_COMMENT")),Some('\t'))
-    val scan_lineitem = Scan("lineitem.csv",Some(Schema("#ORDERKEY","#PARTKEY","#SUPPKEY","#LINENUMBER","#QUANTITY","EXTENDEDPRICE","DISCOUNT","TAX","RETURNFLAG","LINESTATUS","SHIPDATE","COMMITDATE","RECEIPTDATE","SHIPINSTRUCT","SHIPMODE","L_COMMENT")),Some('\t'))
-    val scan_orders = Scan("orders.csv",Some(Schema("#ORDERKEY","#CUSTKEY","ORDERSTATUS","TOTALPRICE","ORDERDATE","ORDERPRIORITY","CLERK","#SHIPPRIORITY","O_COMMENT")),Some('\t'))
+    val scan_lineitem = Scan("lineitem.csv",Some(Schema("#ORDERKEY","#PARTKEY","#SUPPKEY","#LINENUMBER","#QUANTITY","EXTENDEDPRICE","DISCOUNT","TAX","RETURNFLAG","LINESTATUS","#SHIPDATE","#COMMITDATE","#RECEIPTDATE","SHIPINSTRUCT","SHIPMODE","L_COMMENT")),Some('\t'))
+    val scan_orders = Scan("orders.csv",Some(Schema("#ORDERKEY","#CUSTKEY","ORDERSTATUS","TOTALPRICE","#ORDERDATE","ORDERPRIORITY","CLERK","#SHIPPRIORITY","O_COMMENT")),Some('\t'))
     val scan_supplier = Scan("supplier.csv",Some(Schema("#SUPPKEY","S_NAME","S_ADDRESS","#NATIONKEY","S_PHONE","S_ACCTBAL","S_COMMENT")),Some('\t'))
     /*
      * simplified version
@@ -136,8 +136,8 @@ class LFTjoinQueryTest extends TutorialFunSuite {
         Project(
           Schema("#ORDERKEY","#CUSTKEY"), 
           Schema("#ORDERKEY","#CUSTKEY"), 
-          Filter(GTE(Field("ORDERDATE"), Value("1996-01-01")), 
-            Filter(LT(Field("ORDERDATE"), Value("1997-01-01")), 
+          Filter(GTE(Field("#ORDERDATE"), Value(19960101)), 
+            Filter(LT(Field("#ORDERDATE"), Value(19970101)), 
               scan_orders))),   
         Project(
           Schema("#ORDERKEY","#PARTKEY","#SUPPKEY"),
