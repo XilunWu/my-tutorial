@@ -19,7 +19,8 @@ dbgen -vf -s 10
 
 ############################
 #     substitution
+#     On mac OS X, it's gnu-sed(gsed) instead
 ############################
-gsed -i 's/.$//' *.tbl
-gsed -i 's/|/\t/g' *.tbl
+sed -i 's/.$//' *.tbl
+sed -i 's/|/\t/g' *.tbl
 
