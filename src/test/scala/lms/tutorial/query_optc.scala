@@ -29,6 +29,7 @@ Input File Tokenizer
       val start = pos: Rep[Int] // force read
       while (data(pos) != d) pos += 1
       val len = pos - start
+      //Special case for tpch dbgen data. Last column contains '|' and '\n'
       pos += 1
       RString(stringFromCharArray(data,start,len), len)
     }
@@ -209,7 +210,9 @@ Query Interpretation = Compilation
         }
       }
     case LFTJoin(parents) =>
-      val dataSize = Vector(25+1,5+1,10000+1,150000+1,1500000+1,6001215+1)
+      //SF=1
+      //val dataSize = Vector(25+1,5+1,10000+1,150000+1,1500000+1,6001215+1)
+      val dataSize = Vector(25+1,5+1,100000+1,1500000+1,15000000+1,59986052+1)
       val schemaOfResult = resultSchema(LFTJoin(parents))
       //Measure data loading and preprocessing time
       unchecked[Unit]("clock_t begin, end; double time_spent")

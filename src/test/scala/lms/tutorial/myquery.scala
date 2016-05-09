@@ -107,22 +107,13 @@ class LFTjoinQueryTest extends TutorialFunSuite {
     val scan_t = Scan("t.csv")
     val scan_1gram = Scan("1gram.csv",Some(Schema("Phrase", "Year", "MatchCount", "VolumeCount")),Some('\t'))
     val scan_t1gram = Scan("t1gram.csv",Some(Schema("Phrase", "Year", "MatchCount", "VolumeCount")),Some('\t'))
-    val scan_customer = Scan("../../../data/customer.csv",Some(Schema("#CUSTKEY","C_NAME","C_ADDRESS","#NATIONKEY","PHONE","ACCTBAL","MKTSEGMENT","C_COMMENT")),Some('\t'))
-    val scan_nation = Scan("../../../data/nation.csv",Some(Schema("#NATIONKEY","N_NAME","#REGIONKEY","N_COMMENT")),Some('\t'))
-    val scan_region = Scan("../../../data/region.csv",Some(Schema("#REGIONKEY","R_NAME","R_COMMENT")),Some('\t'))
-    val scan_lineitem = Scan("../../../data/lineitem.csv",Some(Schema("#ORDERKEY","#PARTKEY","#SUPPKEY","#LINENUMBER","#QUANTITY","EXTENDEDPRICE","DISCOUNT","TAX","RETURNFLAG","LINESTATUS","#SHIPDATE","#COMMITDATE","#RECEIPTDATE","SHIPINSTRUCT","SHIPMODE","L_COMMENT")),Some('\t'))
-    val scan_orders = Scan("../../../data/orders.csv",Some(Schema("#ORDERKEY","#CUSTKEY","ORDERSTATUS","TOTALPRICE","#ORDERDATE","ORDERPRIORITY","CLERK","#SHIPPRIORITY","O_COMMENT")),Some('\t'))
-    val scan_supplier = Scan("../../../data/supplier.csv",Some(Schema("#SUPPKEY","S_NAME","S_ADDRESS","#NATIONKEY","S_PHONE","S_ACCTBAL","S_COMMENT")),Some('\t'))
-    /*
-     * simplified version
-     *
-    val scan_customer = Scan("customer.csv",Some(Schema("#CUSTKEY","#NATIONKEY")),Some('\t'))
-    val scan_nation = Scan("nation.csv",Some(Schema("#NATIONKEY","#REGIONKEY")),Some('\t'))
-    val scan_region = Scan("region.csv",Some(Schema("#REGIONKEY")),Some('\t'))
-    val scan_lineitem = Scan("lineitem.csv",Some(Schema("#ORDERKEY","#PARTKEY","#SUPPKEY")),Some('\t'))
-    val scan_orders = Scan("orders.csv",Some(Schema("#ORDERKEY","#CUSTKEY")),Some('\t'))
-    val scan_supplier = Scan("supplier.csv",Some(Schema("#SUPPKEY","#NATIONKEY")),Some('\t'))
-    */
+    val scan_customer = Scan("../../../data/customer.tbl",Some(Schema("#CUSTKEY","C_NAME","C_ADDRESS","#NATIONKEY","PHONE","ACCTBAL","MKTSEGMENT","C_COMMENT")),Some('\t'))
+    val scan_nation = Scan("../../../data/nation.tbl",Some(Schema("#NATIONKEY","N_NAME","#REGIONKEY","N_COMMENT")),Some('\t'))
+    val scan_region = Scan("../../../data/region.tbl",Some(Schema("#REGIONKEY","R_NAME","R_COMMENT")),Some('\t'))
+    val scan_lineitem = Scan("../../../data/lineitem.tbl",Some(Schema("#ORDERKEY","#PARTKEY","#SUPPKEY","#LINENUMBER","#QUANTITY","EXTENDEDPRICE","DISCOUNT","TAX","RETURNFLAG","LINESTATUS","#SHIPDATE","#COMMITDATE","#RECEIPTDATE","SHIPINSTRUCT","SHIPMODE","L_COMMENT")),Some('\t'))
+    val scan_orders = Scan("../../../data/orders.tbl",Some(Schema("#ORDERKEY","#CUSTKEY","ORDERSTATUS","TOTALPRICE","#ORDERDATE","ORDERPRIORITY","CLERK","#SHIPPRIORITY","O_COMMENT")),Some('\t'))
+    val scan_supplier = Scan("../../../data/supplier.tbl",Some(Schema("#SUPPKEY","S_NAME","S_ADDRESS","#NATIONKEY","S_PHONE","S_ACCTBAL","S_COMMENT")),Some('\t'))
+    
     val expectedAstForTest = Map(
       "lftj_q5" -> Group(Schema("N_NAME"), Schema("#COUNT"),  //Here we need hack Group to support count(*)
         LFTJoin(List(
