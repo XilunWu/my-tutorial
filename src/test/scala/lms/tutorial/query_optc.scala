@@ -161,8 +161,8 @@ Query Interpretation = Compilation
     case LFTJoin(parents)        =>
       val schema = Schema("#ORDERKEY","#CUSTKEY","#PARTKEY","#SUPPKEY",
         //"C_NAME","C_ADDRESS",
-        "#NATIONKEY",
-        "N_NAME"/*,
+        "#NATIONKEY"/*,
+        "N_NAME",
         "#REGIONKEY",
         "PHONE","ACCTBAL","MKTSEGMENT","C_COMMENT",
         "N_COMMENT",
