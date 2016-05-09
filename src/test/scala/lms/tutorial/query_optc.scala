@@ -225,7 +225,7 @@ Query Interpretation = Compilation
       unchecked[Unit]("end = clock(); printf(\"Data loading: %f\\n\", (double)(end - begin) / CLOCKS_PER_SEC)")
       //Measure trie building time
       unchecked[Unit]("begin = clock()")
-      trieArrays foreach {arr => print(arr.len + " ");arr.toTrieArray}
+      trieArrays foreach {arr => arr.toTrieArray}
       val join = new LFTJmain(trieArrays, schemaOfResult)
       unchecked[Unit]("end = clock(); printf(\"Trie building: %f\\n\", (double)(end - begin) / CLOCKS_PER_SEC)")
       //Measure join time
