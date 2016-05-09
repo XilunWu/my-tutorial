@@ -115,7 +115,7 @@ class LFTjoinQueryTest extends TutorialFunSuite {
     val scan_supplier = Scan("../../../data/supplier.tbl",Some(Schema("#SUPPKEY","S_NAME","S_ADDRESS","#NATIONKEY","S_PHONE","S_ACCTBAL","S_COMMENT")),Some('\t'))
     
     val expectedAstForTest = Map(
-      "lftj_q5" -> /*Group(Schema("N_NAME"), Schema("#COUNT"),  //Here we need hack Group to support count(*)
+      "lftj_q5" -> Group(Schema("N_NAME"), Schema("#COUNT"),  //Here we need hack Group to support count(*)
         LFTJoin(List(
           Project(Schema("#NATIONKEY","N_NAME","#REGIONKEY"), Schema("#NATIONKEY","N_NAME","#REGIONKEY"), scan_nation),
           Project(Schema("#REGIONKEY"), Schema("#REGIONKEY"), Filter(Eq(Field("R_NAME"), Value("ASIA")), scan_region)),
@@ -137,17 +137,7 @@ class LFTjoinQueryTest extends TutorialFunSuite {
             Schema("#ORDERKEY","#PARTKEY","#SUPPKEY"),
             Schema("#ORDERKEY","#PARTKEY","#SUPPKEY"),
             scan_lineitem)
-        )))*/
-        HashJoin(Project(
-            Schema("#ORDERKEY","#CUSTKEY"), 
-            Schema("#ORDERKEY","#CUSTKEY"), 
-            Filter(GTE(Field("#ORDERDATE"), Value(19960101)), 
-              Filter(LT(Field("#ORDERDATE"), Value(19970101)), 
-                scan_orders))),
-        Project(
-            Schema("#ORDERKEY","#PARTKEY","#SUPPKEY"),
-            Schema("#ORDERKEY","#PARTKEY","#SUPPKEY"),
-            scan_lineitem))
+        )))
     )
   }
 
