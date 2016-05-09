@@ -129,10 +129,10 @@ class LFTjoinQueryTest extends TutorialFunSuite {
             scan_customer),
           Project(
             Schema("#ORDERKEY","#CUSTKEY"), 
-            Schema("#ORDERKEY","#CUSTKEY"), scan_orders/*
+            Schema("#ORDERKEY","#CUSTKEY"), 
             Filter(GTE(Field("#ORDERDATE"), Value(19960101)), 
               Filter(LT(Field("#ORDERDATE"), Value(19970101)), 
-                scan_orders))*/),   
+                scan_orders))),
           Project(
             Schema("#ORDERKEY","#PARTKEY","#SUPPKEY"),
             Schema("#ORDERKEY","#PARTKEY","#SUPPKEY"),
