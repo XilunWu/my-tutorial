@@ -138,7 +138,10 @@ class LFTjoinQueryTest extends TutorialFunSuite {
             Schema("#ORDERKEY","#PARTKEY","#SUPPKEY"),
             scan_lineitem)
         )))*/
-        Project(Schema("#NATIONKEY","N_NAME","#REGIONKEY"), Schema("#NATIONKEY","N_NAME","#REGIONKEY"), scan_nation)
+        Project(
+            Schema("#CUSTKEY","#NATIONKEY"),
+            Schema("#CUSTKEY","#NATIONKEY"),
+            scan_customer)
     )
   }
 
