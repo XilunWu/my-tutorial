@@ -24,3 +24,13 @@ dbgen -vf -s 10
 sed -i 's/.$//' *.tbl
 sed -i 's/|/\t/g' *.tbl
 
+############################
+#     run experiment
+############################
+sbt "test-only scala.lms.tutorial.LFTjoinQueryTest"
+cd src/out
+# for Snyder
+# module load gcc/5.2.0 
+time(gcc lftjquery_lftj_q5.check.c -o test) && time (./test 1 > ../result.txt)
+cat ../result.txt
+cd ../../
