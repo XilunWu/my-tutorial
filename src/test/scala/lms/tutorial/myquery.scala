@@ -116,9 +116,9 @@ class LFTjoinQueryTest extends TutorialFunSuite {
     
     val expectedAstForTest = Map(
       "lftj_q5" -> Group(Schema("N_NAME"), Schema("#COUNT"),  //Here we need hack Group to support count(*)
-        LFTJoin(List(
+        LFTJoin(List(/*
           Project(Schema("#NATIONKEY","N_NAME","#REGIONKEY"), Schema("#NATIONKEY","N_NAME","#REGIONKEY"), scan_nation),
-          Project(Schema("#REGIONKEY"), Schema("#REGIONKEY"), Filter(Eq(Field("R_NAME"), Value("ASIA")), scan_region)),
+          Project(Schema("#REGIONKEY"), Schema("#REGIONKEY"), Filter(Eq(Field("R_NAME"), Value("ASIA")), scan_region)),*/
           Project(
             Schema("#SUPPKEY","#NATIONKEY"),
             Schema("#SUPPKEY","#NATIONKEY"),
