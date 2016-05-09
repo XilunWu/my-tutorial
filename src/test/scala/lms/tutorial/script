@@ -1,0 +1,25 @@
+!#/bin/bash
+
+############################
+#     dbgen compilation
+############################
+cp makefile.suite makefile
+
+######
+#change GCC LINUX DB2 TPCH
+######
+
+sed -i 's/.*include.*malloc.h..//g' varsub.c
+sed -i 's/.*include.*malloc.h..//g' bm_utils.c
+
+make
+
+# dbgen
+dbgen -vf -s 10
+
+############################
+#     substitution
+############################
+gsed -i 's/.$//' *.tbl
+gsed -i 's/|/\t/g' *.tbl
+
