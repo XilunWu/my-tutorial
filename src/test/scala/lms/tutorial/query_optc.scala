@@ -161,9 +161,9 @@ Query Interpretation = Compilation
     case LFTJoin(parents)        =>
       val schema = Schema("#ORDERKEY","#CUSTKEY","#PARTKEY","#SUPPKEY",
         //"C_NAME","C_ADDRESS",
-        "#NATIONKEY"/*,
+        "#NATIONKEY",
         "N_NAME",
-        "#REGIONKEY",
+        "#REGIONKEY"/*,
         "PHONE","ACCTBAL","MKTSEGMENT","C_COMMENT",
         "N_COMMENT",
         "R_NAME","R_COMMENT",
@@ -210,9 +210,11 @@ Query Interpretation = Compilation
         }
       }
     case LFTJoin(parents) =>
-      //SF=1
-      //val dataSize = Vector(25+1,5+1,10000+1,150000+1,1500000+1,6001215+1)
-      val dataSize = Vector(25+1,5+1,100000+1,1500000+1,15000000+1,59986052+1)
+      val SF=1
+      val dataSize = SF match {
+        case 1 => Vector(25+1,5+1,10000+1,150000+1,1500000+1,6001215+1)
+        case 10 =>  Vector(25+1,5+1,100000+1,1500000+1,15000000+1,59986052+1)
+      } 
       val schemaOfResult = resultSchema(LFTJoin(parents))
       //Measure data loading and preprocessing time
       unchecked[Unit]("clock_t begin, end; double time_spent")
