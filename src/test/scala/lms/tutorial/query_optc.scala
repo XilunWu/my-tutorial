@@ -160,16 +160,9 @@ Query Interpretation = Compilation
     case PrintCSV(parent)        => Schema()
     case LFTJoin(parents)        =>
       val schema = Schema("#ORDERKEY","#CUSTKEY","#PARTKEY","#SUPPKEY",
-        //"C_NAME","C_ADDRESS",
         "#NATIONKEY",
         "N_NAME",
-        "#REGIONKEY"/*,
-        "PHONE","ACCTBAL","MKTSEGMENT","C_COMMENT",
-        "N_COMMENT",
-        "R_NAME","R_COMMENT",
-        "#LINENUMBER","#QUANTITY","EXTENDEDPRICE","DISCOUNT","TAX","RETURNFLAG","LINESTATUS","SHIPDATE","COMMITDATE","RECEIPTDATE","SHIPINSTRUCT","SHIPMODE","L_COMMENT",
-        "ORDERSTATUS","TOTALPRICE","ORDERDATE","ORDERPRIORITY","CLERK","#SHIPPRIORITY","O_COMMENT",
-        "S_NAME","S_ADDRESS","S_PHONE","S_ACCTBAL","S_COMMENT"*/
+        "#REGIONKEY"
         )
       schema
   }
@@ -529,7 +522,7 @@ Data Structure Implementations
     }
     //Can we write leapFrogJoin in a reversal style?
     def leapFrogJoin(level: Int, yld: Record => Rep[Unit]): Rep[Unit] = {
-      search(level)
+      if (rels.filter(r => r.hasCol(level)).length > 1) search(level)
       /* need modification here. for each relation, the case is diff! */
       if (level == schema.length - 1) {
         if (atEnd(level)) {currLv -= 1; next(level-1)}
