@@ -123,11 +123,11 @@ class LFTjoinQueryTest extends TutorialFunSuite {
       "lftj_q5" -> //Group(Schema("N_NAME"), Schema("#COUNT"),  //Here we need hack Group to support count(*)
         LFTJoin(List(
           Project(Schema("#NATIONKEY","N_NAME","#REGIONKEY"), Schema("#NATIONKEY","N_NAME","#REGIONKEY"), scan_nation),
-          Project(Schema("#REGIONKEY"), Schema("#REGIONKEY"), Filter(Eq(Field("R_NAME"), Value("ASIA")), scan_region)),/*
+          Project(Schema("#REGIONKEY"), Schema("#REGIONKEY"), Filter(Eq(Field("R_NAME"), Value("ASIA")), scan_region)),
           Project(
             Schema("#SUPPKEY","#NATIONKEY"),
             Schema("#SUPPKEY","#NATIONKEY"),
-            scan_supplier),*/
+            scan_supplier),
           Project(
             Schema("#CUSTKEY","#NATIONKEY"),
             Schema("#CUSTKEY","#NATIONKEY"),
@@ -137,11 +137,11 @@ class LFTjoinQueryTest extends TutorialFunSuite {
             Schema("#ORDERKEY","#CUSTKEY"), 
             Filter(GTE(Field("#ORDERDATE"), Value(19960101)), 
               Filter(LT(Field("#ORDERDATE"), Value(19970101)), 
-                scan_orders)))/*,
+                scan_orders))),
           Project(
             Schema("#ORDERKEY","#PARTKEY","#SUPPKEY"),
             Schema("#ORDERKEY","#PARTKEY","#SUPPKEY"),
-            scan_lineitem)*/
+            scan_lineitem)
         ))//)
     )
   }
