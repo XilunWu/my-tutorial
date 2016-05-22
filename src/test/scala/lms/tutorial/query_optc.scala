@@ -159,7 +159,7 @@ Query Interpretation = Compilation
     case HashJoin(left, right)   => resultSchema(left) ++ resultSchema(right)
     case PrintCSV(parent)        => Schema()
     case LFTJoin(parents)        =>
-      val schema = Schema("#ORDERKEY","#CUSTKEY","#PARTKEY","#SUPPKEY",
+      val schema = Schema("#ORDERKEY","#CUSTKEY"/*,"#PARTKEY","#SUPPKEY"*/,
         "#NATIONKEY",
         "N_NAME",
         "#REGIONKEY"
@@ -203,7 +203,7 @@ Query Interpretation = Compilation
         }
       }
     case LFTJoin(parents) =>
-      val SF=1
+      val SF=10
       val dataSize = SF match {
         case 1 => Vector(25+1,5+1,10000+1,150000+1,1500000+1,6001215+1)
         case 10 =>  Vector(25+1,5+1,100000+1,1500000+1,15000000+1,59986052+1)
