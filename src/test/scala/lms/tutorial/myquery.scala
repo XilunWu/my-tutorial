@@ -139,8 +139,8 @@ class LFTjoinQueryTest extends TutorialFunSuite {
               Filter(LT(Field("#ORDERDATE"), Value(19970101)), 
                 scan_orders))),
           Project(
-            Schema("#ORDERKEY","#PARTKEY","#SUPPKEY"),
-            Schema("#ORDERKEY","#PARTKEY","#SUPPKEY"),
+            Schema("#ORDERKEY",/*"#PARTKEY",*/"#SUPPKEY"),
+            Schema("#ORDERKEY",/*"#PARTKEY",*/"#SUPPKEY"),
             scan_lineitem)
         )))
     )
