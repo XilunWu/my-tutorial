@@ -203,7 +203,7 @@ Query Interpretation = Compilation
         }
       }
     case LFTJoin(parents) =>
-      val SF=10
+      val SF=1
       val dataSize = SF match {
         case 1 => Vector(25+1,5+1,10000+1,150000+1,1500000+1,6001215+1)
         case 10 =>  Vector(25+1,5+1,100000+1,1500000+1,15000000+1,59986052+1)
