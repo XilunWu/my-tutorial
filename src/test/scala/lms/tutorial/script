@@ -25,6 +25,17 @@ sed -i 's/.$//' *.tbl
 sed -i 's/|/\t/g' *.tbl
 
 ############################
+#     sorting
+############################
+#  example:
+#  sort -t$'\t' -k3,3n -k1,1n nation.csv -o nation.csv
+#  sort -t$'\t' -k4,4n -k1,1n supplier.csv -o supplier.csv
+#  sort -t$'\t' -k4,4n -k1,1n customer.csv -o customer.csv
+#  sort -t$'\t' -k2,2n -k1,1n orders.csv -o orders.csv
+#  sort -t$'\t' -k1,1n -k3,3n -k2,2n lineitem.csv -o lineitem.csv
+
+
+############################
 #     run experiment
 ############################
 sbt "test-only scala.lms.tutorial.LFTjoinQueryTest"

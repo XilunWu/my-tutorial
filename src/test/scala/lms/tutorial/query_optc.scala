@@ -159,10 +159,15 @@ Query Interpretation = Compilation
     case HashJoin(left, right)   => resultSchema(left) ++ resultSchema(right)
     case PrintCSV(parent)        => Schema()
     case LFTJoin(parents)        =>
-      val schema = Schema("#ORDERKEY","#CUSTKEY",/*"#PARTKEY",*/"#SUPPKEY",
+      val schema = Schema(
+        "#REGIONKEY",
         "#NATIONKEY",
         "N_NAME",
-        "#REGIONKEY"
+        //order of suppkey, orderkey and custkey  
+        "#CUSTKEY",
+        "#ORDERKEY",
+        "#SUPPKEY",       
+        "#PARTKEY"
         )
       schema
   }

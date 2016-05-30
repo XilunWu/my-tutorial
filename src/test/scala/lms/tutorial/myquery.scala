@@ -122,25 +122,25 @@ class LFTjoinQueryTest extends TutorialFunSuite {
     val expectedAstForTest = Map(
       "lftj_q5" -> Group(Schema("N_NAME"), Schema("#COUNT"),  //Here we need hack Group to support count(*)
         LFTJoin(List(
-          Project(Schema("#NATIONKEY","N_NAME","#REGIONKEY"), Schema("#NATIONKEY","N_NAME","#REGIONKEY"), scan_nation),
+          Project(Schema("#REGIONKEY","#NATIONKEY","N_NAME"), Schema("#REGIONKEY","#NATIONKEY","N_NAME"), scan_nation),
           Project(Schema("#REGIONKEY"), Schema("#REGIONKEY"), Filter(Eq(Field("R_NAME"), Value("ASIA")), scan_region)),
           Project(
-            Schema("#SUPPKEY","#NATIONKEY"),
-            Schema("#SUPPKEY","#NATIONKEY"),
+            Schema("#NATIONKEY","#SUPPKEY"),
+            Schema("#NATIONKEY","#SUPPKEY"),
             scan_supplier),
           Project(
-            Schema("#CUSTKEY","#NATIONKEY"),
-            Schema("#CUSTKEY","#NATIONKEY"),
+            Schema("#NATIONKEY","#CUSTKEY"),
+            Schema("#NATIONKEY","#CUSTKEY"),
             scan_customer),
           Project(
-            Schema("#ORDERKEY","#CUSTKEY"), 
-            Schema("#ORDERKEY","#CUSTKEY"), 
+            Schema("#CUSTKEY","#ORDERKEY"), 
+            Schema("#CUSTKEY","#ORDERKEY"), 
             Filter(GTE(Field("#ORDERDATE"), Value(19960101)), 
               Filter(LT(Field("#ORDERDATE"), Value(19970101)), 
                 scan_orders))),
           Project(
-            Schema("#ORDERKEY",/*"#PARTKEY",*/"#SUPPKEY"),
-            Schema("#ORDERKEY",/*"#PARTKEY",*/"#SUPPKEY"),
+            Schema("#ORDERKEY","#SUPPKEY","#PARTKEY"),
+            Schema("#ORDERKEY","#SUPPKEY","#PARTKEY"),
             scan_lineitem)
         )))
     )
