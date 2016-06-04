@@ -105,7 +105,7 @@ class LFTjoinQueryTest extends TutorialFunSuite {
 
   trait ExpectedASTs extends QueryAST {
     val scan_t = Scan("t.csv")
-    val SF = 1
+    val SF = 10
     val postfix = SF match {
       case 1 => ".csv"
       case 10 => ".tbl"
