@@ -352,16 +352,16 @@ Data Structure Implementations
     def seek(level:Int, seekKey: RField): Rep[Unit] = {   //find the first of repetitions
       val lv:Int = levelOf(level)
       val start = cursor(lv)
-      val end = if (lv == 0) lenArray(0) else indexArray(lv - 1)(cursor(lv - 1) + 1)
-      //println("start = " + start + ", end = " + end)
-      bsearch(lv, seekKey, start, end)
+      if (!(valueArray(cursor(lv))(lv) compare seekKey)) {
+        val end = if (lv == 0) lenArray(0) else indexArray(lv - 1)(cursor(lv - 1) + 1)
+        bsearch(lv, seekKey, start, end)
+      }
     }
     def lsearch(lv:Int, seekKey: RField, start: Rep[Int], end: Rep[Int]): Rep[Int] = {
       var vstart = start
       var vend = end
       while(vstart != vend) {
-        if(valueArray(vstart)(lv) compare seekKey) vend = vstart
-        else if (valueArray(vstart)(lv) lessThan seekKey) vstart += 1
+        if (valueArray(vstart)(lv) lessThan seekKey) vstart += 1
         else vend = vstart
       }
       vstart
@@ -371,7 +371,7 @@ Data Structure Implementations
       //there're many search strategies for searching which is data dependently. 
       //we want to have some optimal strategies for general data.
       var vstart = start
-      var vend = if(valueArray(vstart)(lv) compare seekKey) start else end
+      var vend = /*if(valueArray(vstart)(lv) compare seekKey) start else*/ end
       while(vstart != vend) {
         //if less than 5 elements, do linear search instead of b-search
         if (vend - vstart < 5) {vstart = lsearch(lv,seekKey,vstart,vend); vend = vstart}
