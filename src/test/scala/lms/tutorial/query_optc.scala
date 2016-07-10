@@ -586,7 +586,6 @@ Data Structure Implementations
       }) {
         rels.filter(r => r.hasCol(level)) foreach {r => r.seek(level, maxkeys(0)(level))}
       }
-      //println("LV: " + currLv + ", key = " + maxkey)
     }
     def key(level: Int) = keys(level)(0)
     def keys(level: Int) = {
