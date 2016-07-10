@@ -208,7 +208,7 @@ Query Interpretation = Compilation
         }
       }
     case LFTJoin(parents) =>
-      val SF=10
+      val SF=1
       val dataSize = SF match {
         case 1 => Vector(25+1,5+1,10000+1,150000+1,1500000+1,6001215+1)
         case 10 =>  Vector(25+1,5+1,100000+1,1500000+1,15000000+1,59986052+1)
@@ -356,16 +356,31 @@ Data Structure Implementations
       //println("start = " + start + ", end = " + end)
       bsearch(lv, seekKey, start, end)
     }
-    def bsearch(lv:Int, seekKey: RField, start: Rep[Int], end: Rep[Int]): Rep[Unit] = {
-      //println("start = " + start + ", end = " + end)
+    def lsearch(lv:Int, seekKey: RField, start: Rep[Int], end: Rep[Int]): Rep[Int] = {
       var vstart = start
       var vend = end
       while(vstart != vend) {
-        //Shall we transform it into access[Unit](){func}? This introduce more code. 
-        val pivot = valueArray((vstart + vend) / 2)(lv)
-        if (pivot compare seekKey) {vstart = (vstart + vend) / 2; vend = vstart}
-        else if (pivot lessThan seekKey) {vstart = (vstart + vend) / 2 + 1}
-        else {vend = (vstart + vend) / 2}
+        if(valueArray(vstart)(lv) compare seekKey) vend = vstart
+        else if (valueArray(vstart)(lv) lessThan seekKey) vstart += 1
+        else vend = vstart
+      }
+      vstart
+    }
+    def bsearch(lv:Int, seekKey: RField, start: Rep[Int], end: Rep[Int]): Rep[Unit] = {
+      //if the current value is the seekKey it means we don't need actually do search.
+      //there're many search strategies for searching which is data dependently. 
+      //we want to have some optimal strategies for general data.
+      var vstart = start
+      var vend = if(valueArray(vstart)(lv) compare seekKey) start else end
+      while(vstart != vend) {
+        //if less than 5 elements, do linear search instead of b-search
+        if (vend - vstart < 5) {vstart = lsearch(lv,seekKey,vstart,vend); vend = vstart}
+        else {
+          val pivot = valueArray((vstart + vend) / 2)(lv)
+          if (pivot compare seekKey) {vstart = (vstart + vend) / 2; vend = vstart}
+          else if (pivot lessThan seekKey) {vstart = (vstart + vend) / 2 + 1}
+          else {vend = (vstart + vend) / 2}
+        }
       }
       cursor(lv) = vstart
     }
