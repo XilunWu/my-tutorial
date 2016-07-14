@@ -259,7 +259,7 @@ Data Structure Implementations
   }
   class TrieArray (dataSize: Int, schema: Schema, schemaOfResult: Schema) {
     var len = 0
-    val buf = new ArrayBuffer(dataSize, schema)
+    //val buf = new ArrayBuffer(dataSize, schema)
     val valueArray = new ArrayBuffer(dataSize, schema)
     val indexArray = schema.map(f => NewArray[Int](dataSize))
     val lenArray = NewArray[Int](schema.length)
@@ -269,9 +269,10 @@ Data Structure Implementations
     def hasCol(i: Int): Boolean = (i >= 0) && (i < schemaOfResult.length) && flagTable(i)
     def levelOf(i : Int): Int = levelTable indexOf i
     def +=(x: Fields) = {
-      buf += x
+      //buf += x
+      valueArray += x
       len += 1
-    }
+    }/*
     def output: Rep[Unit] = {
       var a = 0
       while (a < len) {
@@ -282,7 +283,7 @@ Data Structure Implementations
         println("")
         a += 1
       }
-    }
+    }*/
     def toTrieArray: Rep[Unit] = {
       //generate indexArray
       val lastRecord = new ArrayBuffer(1,schema)
@@ -297,7 +298,7 @@ Data Structure Implementations
         diff = false
         while (j < schema.length) {
           access(j, schema.length){j =>
-            val curr_value = buf(i)(j)
+            val curr_value = valueArray(i,j)
             //curr_value.print()
             //print("|")
             if (diff || !(lastRecord(0)(j) compare curr_value)) {
@@ -577,8 +578,10 @@ Data Structure Implementations
         if (flag == true) false
         else {
           val kArray = keys(level)
-          //Does update take too many operations?
+          //Does update take too many operations? 
           //seems it does all 7 assignments. 
+          //minkeys maxkeys res
+          //todo: transform kArray from Vector[RField] to .
           minkeys.update(0, level, kArray(0))
           maxkeys.update(0, level, kArray(0))
           kArray foreach {k => 
