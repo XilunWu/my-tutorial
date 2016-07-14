@@ -332,7 +332,7 @@ Data Structure Implementations
 
     def key(level:Int): RField = {
       val lv:Int = levelOf(level)
-      valueArray(cursor(lv))(lv)
+      valueArray(cursor(lv),lv)
     }
     def open(level:Int): Rep[Unit] = {
       val lv:Int = levelOf(level)
@@ -349,10 +349,11 @@ Data Structure Implementations
       else if (lv != 0 && cursor(lv) == indexArray(lv - 1)(cursor(lv - 1) + 1)) true
       else false
     }
-    def seek(level:Int, seekKey: RField): Rep[Unit] = {   //find the first of repetitions
+    def seek(level:Int, seekKey: RField): Rep[Unit] = {
+      //can introduce more efficient way to compute valueArray(cursor(lv))(lv)!
       val lv:Int = levelOf(level)
       val start = cursor(lv)
-      if (!(valueArray(cursor(lv))(lv) compare seekKey)) {
+      if (!(valueArray(cursor(lv),lv) compare seekKey)) {
         val end = if (lv == 0) lenArray(0) else indexArray(lv - 1)(cursor(lv - 1) + 1)
         bsearch(lv, seekKey, start, end)
       }
@@ -361,7 +362,7 @@ Data Structure Implementations
       var vstart = start
       var vend = end
       while(vstart != vend) {
-        if (valueArray(vstart)(lv) lessThan seekKey) vstart += 1
+        if (valueArray(vstart,lv) lessThan seekKey) vstart += 1
         else vend = vstart
       }
       vstart
@@ -371,12 +372,12 @@ Data Structure Implementations
       //there're many search strategies for searching which is data dependently. 
       //we want to have some optimal strategies for general data.
       var vstart = start
-      var vend = /*if(valueArray(vstart)(lv) compare seekKey) start else*/ end
+      var vend = end
       while(vstart != vend) {
         //if less than 5 elements, do linear search instead of b-search
         if (vend - vstart < 5) {vstart = lsearch(lv,seekKey,vstart,vend); vend = vstart}
         else {
-          val pivot = valueArray((vstart + vend) / 2)(lv)
+          val pivot = valueArray((vstart + vend) / 2,lv)
           if (pivot compare seekKey) {vstart = (vstart + vend) / 2; vend = vstart}
           else if (pivot lessThan seekKey) {vstart = (vstart + vend) / 2 + 1}
           else {vend = (vstart + vend) / 2}
@@ -524,6 +525,10 @@ Data Structure Implementations
       case IntColBuffer(b) => RInt(b(i))
       case StringColBuffer(b,l) => RString(b(i),l(i))
     }
+    def apply(i: Rep[Int], j: Int) = buf(j) match {
+      case IntColBuffer(b) => RInt(b(i))
+      case StringColBuffer(b,l) => RString(b(i),l(i))
+    }
   }
 
   /**
@@ -573,6 +578,8 @@ Data Structure Implementations
         if (flag == true) false
         else {
           val kArray = keys(level)
+          //Does update take too many operations?
+          //seems it does all 7 assignments. 
           minkeys.update(0, level, kArray(0))
           maxkeys.update(0, level, kArray(0))
           kArray foreach {k => 
@@ -581,10 +588,10 @@ Data Structure Implementations
             if(maxkeys(0)(level) lessThan k)              
               maxkeys.update(0,level,k)
           }
-          !(maxkeys(0)(level) compare minkeys(0)(level))
+          !(maxkeys(0,level) compare minkeys(0,level))
         }
       }) {
-        rels.filter(r => r.hasCol(level)) foreach {r => r.seek(level, maxkeys(0)(level))}
+        rels.filter(r => r.hasCol(level)) foreach {r => r.seek(level, maxkeys(0,level))}
       }
     }
     def key(level: Int) = keys(level)(0)
