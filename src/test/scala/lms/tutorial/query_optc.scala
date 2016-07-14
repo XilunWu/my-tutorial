@@ -350,7 +350,6 @@ Data Structure Implementations
       else false
     }
     def seek(level:Int, seekKey: RField): Rep[Unit] = {
-      //can introduce more efficient way to compute valueArray(cursor(lv))(lv)!
       val lv:Int = levelOf(level)
       val start = cursor(lv)
       if (!(valueArray(cursor(lv),lv) compare seekKey)) {
