@@ -259,33 +259,18 @@ Data Structure Implementations
   }
   class TrieArray (dataSize: Int, schema: Schema, schemaOfResult: Schema) {
     var len = 0
-    //val buf = new ArrayBuffer(dataSize, schema)
     val valueArray = new ArrayBuffer(dataSize, schema)
     val indexArray = schema.map(f => NewArray[Int](dataSize))
     val lenArray = NewArray[Int](schema.length)
-    //should be Vector[Boolean]?
     val flagTable = schemaOfResult.map(f => schema contains f)
     val levelTable = schema.map(f => schemaOfResult indexOf f)
     def hasCol(i: Int): Boolean = (i >= 0) && (i < schemaOfResult.length) && flagTable(i)
     def levelOf(i : Int): Int = levelTable indexOf i
     def +=(x: Fields) = {
-      //buf += x
       valueArray += x
       len += 1
-    }/*
-    def output: Rep[Unit] = {
-      var a = 0
-      while (a < len) {
-        buf(a) foreach {line =>
-          line.print()
-          print(" ")
-        }
-        println("")
-        a += 1
-      }
-    }*/
+    }
     def toTrieArray: Rep[Unit] = {
-      //generate indexArray
       val lastRecord = new ArrayBuffer(1,schema)
       lastRecord.update(0,schema.map{
         case hd if isNumericCol(hd) => RInt(-1)
@@ -299,8 +284,6 @@ Data Structure Implementations
         while (j < schema.length) {
           access(j, schema.length){j =>
             val curr_value = valueArray(i,j)
-            //curr_value.print()
-            //print("|")
             if (diff || !(lastRecord(0)(j) compare curr_value)) {
               valueArray.update(next(j), j, curr_value)
               if (j != schema.length - 1)
@@ -312,12 +295,8 @@ Data Structure Implementations
           }
           j += 1
         }
-        //print("line ")
-        //println(i)
         i += 1
         j = 0
-        //lastRecord(0) foreach {r => r.print}
-        //println("")
       }
       //for the last row
       while (j < schema.length - 1) {
@@ -496,9 +475,6 @@ Data Structure Implementations
     }
   }
 
-  // column-oriented array buffer, with a row-oriented interface,
-  // specialized to data representation
-
   abstract class ColBuffer
   case class IntColBuffer(data: Rep[Array[Int]]) extends ColBuffer
   case class StringColBuffer(data: Rep[Array[String]], len: Rep[Array[Int]]) extends ColBuffer
@@ -547,8 +523,11 @@ Data Structure Implementations
     }
     //Can we write leapFrogJoin in a reversal style?
     def leapFrogJoin(level: Int, yld: Record => Rep[Unit]): Rep[Unit] = {
+      //!!!
+      //200 lines code for search() function. reduce!
       if (rels.filter(r => r.hasCol(level)).length > 1) search(level)
       /* need modification here. for each relation, the case is diff! */
+      //optimize here?
       if (level == schema.length - 1) {
         if (atEnd(level)) {currLv -= 1; next(level-1)}
         else {pushIntoRes(level, key(level)); next(level); yld(makeRecord)}
@@ -581,13 +560,12 @@ Data Structure Implementations
           //Does update take too many operations? 
           //seems it does all 7 assignments. 
           //minkeys maxkeys res
-          //todo: transform kArray from Vector[RField] to .
           minkeys.update(0, level, kArray(0))
           maxkeys.update(0, level, kArray(0))
           kArray foreach {k => 
-            if (k lessThan minkeys(0)(level))
+            if (k lessThan minkeys(0,level))
               minkeys.update(0,level,k)
-            if(maxkeys(0)(level) lessThan k)              
+            if(maxkeys(0,level) lessThan k)              
               maxkeys.update(0,level,k)
           }
           !(maxkeys(0,level) compare minkeys(0,level))
