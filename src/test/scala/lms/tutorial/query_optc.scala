@@ -286,8 +286,7 @@ Data Structure Implementations
             val curr_value = valueArray(i,j)
             if (diff || !(lastRecord(0)(j) compare curr_value)) {
               valueArray.update(next(j), j, curr_value)
-              if (j != schema.length - 1)
-                  indexArray(j)(next(j)) = next(j+1)
+              if (j != schema.length - 1) indexArray(j)(next(j)) = next(j+1)
               lastRecord.update(0,j,curr_value)
               next(j) = next(j) + 1
               diff = true
