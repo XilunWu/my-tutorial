@@ -333,7 +333,24 @@ Data Structure Implementations
       val start = cursor(lv)
       if (!(valueArray(cursor(lv),lv) compare seekKey)) {
         val end = if (lv == 0) lenArray(0) else indexArray(lv - 1)(cursor(lv - 1) + 1)
-        bsearch(lv, seekKey, start, end)
+        //bsearch(lv, seekKey, start, end)
+        interpolation_search(lv, seekKey, start, end)
+      }
+    }
+    def interpolation_search(lv:Int, seekKey: RField, start: Rep[Int], end: Rep[Int]): Rep[Unit] = {
+      var vstart = start
+      var vend = end
+      while(vstart != vend) {
+        //if less than 5 elements, do linear search instead of b-search
+        if (vend - vstart < 5) {vstart = lsearch(lv,seekKey,vstart,vend); vend = vstart}
+        else {
+          //implement minus operator for RField
+          val mid = vstart + (seekKey - valueArray(vstart,lv)) * (vstart - vend) / (valueArray(vend,lv) - valueArray(vstart,lv))
+          val pivot = valueArray(mid,lv)
+          if (pivot compare seekKey) {vstart = (vstart + vend) / 2; vend = vstart}
+          else if (pivot lessThan seekKey) {vstart = (vstart + vend) / 2 + 1}
+          else {vend = (vstart + vend) / 2}
+        }
       }
     }
     def lsearch(lv:Int, seekKey: RField, start: Rep[Int], end: Rep[Int]): Rep[Int] = {
