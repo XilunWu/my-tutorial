@@ -347,9 +347,9 @@ Data Structure Implementations
       val start = cursor(lv)
       if (!(valueArray(cursor(lv),lv) compare seekKey)) {
         val end = if (lv == 0) lenArray(0) else indexArray(lv - 1)(cursor(lv - 1) + 1)
-        /*if (end - start > 256) interpolation_search(lv,seekKey,start,end)
-        else bsearch(lv, seekKey, start, end)*/
-        interpolation_search(lv,seekKey,start,end)
+        if (end - start > 256) interpolation_search(lv,seekKey,start,end)
+        else bsearch(lv, seekKey, start, end)
+        //interpolation_search(lv,seekKey,start,end)
       }
     }
     def interpolation_search(lv:Int, seekKey: RField, start: Rep[Int], end: Rep[Int]): Rep[Unit] = {
