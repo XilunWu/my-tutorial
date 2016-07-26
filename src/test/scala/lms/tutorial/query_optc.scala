@@ -61,6 +61,7 @@ Low-Level Processing Logic
     def hash: Rep[Long]
     def lessThan(o :RField): Rep[Boolean]
     //def update(o: RField)
+    def -(x:RField): Rep[Int]
   }
   //make data visilble outside RString.
   case class RString(val data: Rep[String], len: Rep[Int]) extends RField {
@@ -82,6 +83,15 @@ Low-Level Processing Logic
     }
     def hash = data.HashCode(len)
     //def update(o: RField) = o match { case RString(data2, len2) => data = data2; len = len2}
+    def -(x:RField) = x match { case RString(data2, len2) =>
+      var res = 0
+      var i = 0
+      while (i < len && i < len2) {
+        res *= 26
+        res = res + (data.charAt(i).toInt - data2.charAt(i).toInt)
+      }
+      res
+    }
   }
   //make value visilble outside RInt.
   case class RInt(val value: Rep[Int]) extends RField {
@@ -90,6 +100,7 @@ Low-Level Processing Logic
     def lessThan(o: RField) = o match { case RInt(v2) =>  value < v2 }
     def hash = value.asInstanceOf[Rep[Long]]
     //def update(o: RField) = o match { case RInt(v2) => value = v2}
+    def -(x:RField) = x match { case RInt(v2) => value - v2}
   }
 
   type Fields = Vector[RField]
@@ -284,7 +295,7 @@ Data Structure Implementations
         while (j < schema.length) {
           access(j, schema.length){j =>
             val curr_value = valueArray(i,j)
-            if (diff || !(lastRecord(0)(j) compare curr_value)) {
+            if (diff || !(lastRecord(0,j) compare curr_value)) {
               valueArray.update(next(j), j, curr_value)
               if (j != schema.length - 1) indexArray(j)(next(j)) = next(j+1)
               lastRecord.update(0,j,curr_value)
@@ -306,6 +317,9 @@ Data Structure Implementations
         j += 1
       }
       lenArray(j) = next(j)
+      /*var k = 0
+      while (k < schema.length) {println(lenArray(k)); k += 1}
+      println("")*/
     }
     val cursor = NewArray[Int](schema.length)
 
@@ -333,8 +347,9 @@ Data Structure Implementations
       val start = cursor(lv)
       if (!(valueArray(cursor(lv),lv) compare seekKey)) {
         val end = if (lv == 0) lenArray(0) else indexArray(lv - 1)(cursor(lv - 1) + 1)
-        //bsearch(lv, seekKey, start, end)
-        interpolation_search(lv, seekKey, start, end)
+        if (end - start > 256) interpolation_search(lv,seekKey,start,end)
+        else bsearch(lv, seekKey, start, end)
+        //interpolation_search(lv,seekKey,start,end)
       }
     }
     def interpolation_search(lv:Int, seekKey: RField, start: Rep[Int], end: Rep[Int]): Rep[Unit] = {
@@ -345,13 +360,36 @@ Data Structure Implementations
         if (vend - vstart < 5) {vstart = lsearch(lv,seekKey,vstart,vend); vend = vstart}
         else {
           //implement minus operator for RField
-          val mid = vstart + (seekKey - valueArray(vstart,lv)) * (vstart - vend) / (valueArray(vend,lv) - valueArray(vstart,lv))
-          val pivot = valueArray(mid,lv)
-          if (pivot compare seekKey) {vstart = (vstart + vend) / 2; vend = vstart}
-          else if (pivot lessThan seekKey) {vstart = (vstart + vend) / 2 + 1}
-          else {vend = (vstart + vend) / 2}
+          /*
+          print(lv)
+          print(" ")
+          print(vend - vstart)
+          print(" ")
+          print(seekKey - valueArray(vstart,lv)) 
+          print(" ")
+          print(vstart)
+          print(" ")
+          print(vstart + (1.0 * (seekKey - valueArray(vstart,lv)) * (vend - vstart - 1) 
+            / (valueArray(vend-1,lv) - valueArray(vstart,lv))).toInt)
+          print(" ")
+          print(valueArray(vend-1,lv) - valueArray(vstart,lv)) 
+          print(" ")
+          println(vend)*/
+          var diff = seekKey - valueArray(vstart,lv)
+          var range = valueArray(vend-1,lv) - valueArray(vstart,lv)
+          if (diff <=0 ) vend = vstart
+          else if (diff > range) vstart = vend
+          else {
+            var mid = vstart + (1.0 * diff * (vend - vstart - 1) 
+            / range).toInt
+            val pivot = valueArray(mid,lv)
+            if (pivot compare seekKey) {vstart = mid; vend = vstart}
+            else if (pivot lessThan seekKey) {vstart = mid + 1}
+            else {vend = mid}
+          }
         }
       }
+      cursor(lv) = vstart
     }
     def lsearch(lv:Int, seekKey: RField, start: Rep[Int], end: Rep[Int]): Rep[Int] = {
       var vstart = start
