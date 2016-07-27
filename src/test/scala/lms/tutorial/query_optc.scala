@@ -240,9 +240,14 @@ Query Interpretation = Compilation
       val join = new LFTJmain(trieArrays, schemaOfResult)
       unchecked[Unit]("end = clock(); printf(\"Trie building: %f\\n\", (double)(end - begin) / CLOCKS_PER_SEC)")
       //Measure join time
-      unchecked[Unit]("begin = clock()")
-      join.run(yld)
-      unchecked[Unit]("end = clock(); printf(\"Join: %f\\n\", (double)(end - begin) / CLOCKS_PER_SEC)")
+      /* do it 5 times */
+      var i = 0
+      while(i < 5) {
+        unchecked[Unit]("begin = clock()")
+        join.run(yld)
+        unchecked[Unit]("end = clock(); printf(\"Join: %f\\n\", (double)(end - begin) / CLOCKS_PER_SEC)")
+        i += 1
+      }
     case PrintCSV(parent) =>
       val schema = resultSchema(parent)
       printSchema(schema)
@@ -418,6 +423,13 @@ Data Structure Implementations
       }
       cursor(lv) = vstart
     }
+    def resetCursor = {
+      var i = 0
+      while(i < schema.length) {
+        cursor(i) = 0
+        i += 1
+      }
+    }
   }
 
 
@@ -574,6 +586,9 @@ Data Structure Implementations
       while (currLv != -1) {
         unlift(leapFrogJoin)(yld, currLv, schema.length) //return -1 if not found
       }
+      //reset all variables
+      currLv = 0
+      rels foreach {r => r.resetCursor}
     }
     //Can we write leapFrogJoin in a reversal style?
     def leapFrogJoin(level: Int, yld: Record => Rep[Unit]): Rep[Unit] = {
