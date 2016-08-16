@@ -118,7 +118,9 @@ class LFTjoinQueryTest extends TutorialFunSuite {
     val scan_lineitem = Scan("../../../data/lineitem"+postfix,Some(Schema("#ORDERKEY","#PARTKEY","#SUPPKEY","#LINENUMBER","#QUANTITY","EXTENDEDPRICE","DISCOUNT","TAX","RETURNFLAG","LINESTATUS","#SHIPDATE","#COMMITDATE","#RECEIPTDATE","SHIPINSTRUCT","SHIPMODE","L_COMMENT")),Some('\t'))
     val scan_orders = Scan("../../../data/orders"+postfix,Some(Schema("#ORDERKEY","#CUSTKEY","ORDERSTATUS","TOTALPRICE","#ORDERDATE","ORDERPRIORITY","CLERK","#SHIPPRIORITY","O_COMMENT")),Some('\t'))
     val scan_supplier = Scan("../../../data/supplier"+postfix,Some(Schema("#SUPPKEY","S_NAME","S_ADDRESS","#NATIONKEY","S_PHONE","S_ACCTBAL","S_COMMENT")),Some('\t'))
-    
+    val scan_part = Scan("../../../data/part"+postfix,Some(Schema("#PARTKEY","P_NAME","P_MFGR","P_BRAND","P_TYPE","P_SIZE","P_CONTAINER","P_RETAILPRICE","P_COMMENT")),Some('\t'))
+    val scan_partsupp = Scan("../../../data/partsupp"+postfix,Some(Schema("#PARTKEY","#SUPPKEY","PS_AVAILQTY","PS_SUPPLYCOST","PS_COMMENT")),Some('\t'))
+
     val expectedAstForTest = Map(
       "lftj_q5" -> Group(Schema("N_NAME"), Schema("#COUNT"),  //Here we need hack Group to support count(*)
         LFTJoin(List(
@@ -126,7 +128,7 @@ class LFTjoinQueryTest extends TutorialFunSuite {
           Project(Schema("#REGIONKEY"), Schema("#REGIONKEY"), Filter(Eq(Field("R_NAME"), Value("ASIA")), scan_region)),
           Project(
             Schema("#NATIONKEY","#SUPPKEY"),
-            Schema("#NATIONKEY","#SUPPKEY"),
+            Schema("#NATIONKEY","#SUPPKEY"),  
             scan_supplier),
           Project(
             Schema("#NATIONKEY","#CUSTKEY"),
@@ -142,6 +144,31 @@ class LFTjoinQueryTest extends TutorialFunSuite {
             Schema("#ORDERKEY","#SUPPKEY","#PARTKEY"),
             Schema("#ORDERKEY","#SUPPKEY","#PARTKEY"),
             scan_lineitem)
+        ))),
+      "lftj_q9" -> Group(Schema("N_NAME"), Schema("#COUNT"),
+        LFTJoin(List(
+          Project(Schema("#NATIONKEY","N_NAME"), Schema("#NATIONKEY","N_NAME"), scan_nation),
+          Project(
+            Schema("#NATIONKEY","#SUPPKEY"),
+            Schema("#NATIONKEY","#SUPPKEY"),  
+            scan_supplier),
+          Project(
+            Schema("#ORDERKEY"), 
+            Schema("#ORDERKEY"), 
+            scan_orders),
+          Project(
+            Schema("#SUPPKEY","#PARTKEY","#ORDERKEY"),
+            Schema("#SUPPKEY","#PARTKEY","#ORDERKEY"),
+            scan_lineitem),
+          Project(
+            Schema("#PARTKEY"),
+            Schema("#PARTKEY"),
+            Filter(CON(Field("P_NAME"), Value("green")),
+              scan_part)),
+          Project(
+            Schema("#SUPPKEY","#PARTKEY"),
+            Schema("#SUPPKEY","#PARTKEY"),
+            scan_partsupp)
         )))
     )
   }
@@ -149,8 +176,9 @@ class LFTjoinQueryTest extends TutorialFunSuite {
   val defaultEvalTable = dataFilePath("1gram.csv")
   val t1gram = "? schema Phrase, Year, MatchCount, VolumeCount delim \\t"
 
-//  testquery("t1gram1", s"select * from $t1gram")
-  testquery("lftj_q5", "")
+  //testquery("t1gram1", s"select * from $t1gram")
+  //testquery("lftj_q5", "")
+  testquery("lftj_q9","")
 }
 
 

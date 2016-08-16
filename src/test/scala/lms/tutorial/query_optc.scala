@@ -61,7 +61,8 @@ Low-Level Processing Logic
     def hash: Rep[Long]
     def lessThan(o :RField): Rep[Boolean]
     //def update(o: RField)
-    def -(x:RField): Rep[Int]
+    def -(o:RField): Rep[Int]
+    def contains(o:RField): Rep[Boolean]
   }
   //make data visilble outside RString.
   case class RString(val data: Rep[String], len: Rep[Int]) extends RField {
@@ -83,14 +84,26 @@ Low-Level Processing Logic
     }
     def hash = data.HashCode(len)
     //def update(o: RField) = o match { case RString(data2, len2) => data = data2; len = len2}
-    def -(x:RField) = x match { case RString(data2, len2) =>
+    def -(o:RField) = o match { case RString(data2, len2) =>
       var res = 0
       var i = 0
       while (i < len && i < len2) {
         res *= 26
         res = res + (data.charAt(i).toInt - data2.charAt(i).toInt)
+        i += 1
       }
       res
+    }
+    def contains(o:RField) = o match { case RString(data2, len2) =>
+      //
+      var nmatch = 0
+      var i = 0
+      while (nmatch != len2 && i < len) {
+        if (data.charAt(i) == data2.charAt(nmatch)) nmatch += 1
+        else nmatch = 0
+        i += 1
+      }
+      nmatch == len2
     }
   }
   //make value visilble outside RInt.
@@ -100,7 +113,10 @@ Low-Level Processing Logic
     def lessThan(o: RField) = o match { case RInt(v2) =>  value < v2 }
     def hash = value.asInstanceOf[Rep[Long]]
     //def update(o: RField) = o match { case RInt(v2) => value = v2}
-    def -(x:RField) = x match { case RInt(v2) => value - v2}
+    def -(o:RField) = o match { case RInt(v2) => value - v2}
+    def contains(o:RField) = o match { case RInt(v2) => //no contains support for Int
+      v2 <= value
+    }
   }
 
   type Fields = Vector[RField]
@@ -150,9 +166,9 @@ Query Interpretation = Compilation
 */
   def evalPred(p: Predicate)(rec: Record): Rep[Boolean] = p match {
     case Eq(a1, a2) => evalRef(a1)(rec) compare evalRef(a2)(rec)
-    //Add predicate LessThan!
     case LT(a1, a2) => evalRef(a1)(rec) lessThan evalRef(a2)(rec)
     case GTE(a1, a2) => !(evalRef(a1)(rec) lessThan evalRef(a2)(rec))
+    case CON(a1, a2) => evalRef(a1)(rec) contains evalRef(a2)(rec)
   }
 
   def evalRef(r: Ref)(rec: Record): RField = r match {
@@ -171,14 +187,11 @@ Query Interpretation = Compilation
     case PrintCSV(parent)        => Schema()
     case LFTJoin(parents)        =>
       val schema = Schema(
-        "#REGIONKEY",
         "#NATIONKEY",
         "N_NAME",
-        //order of suppkey, orderkey and custkey  
-        "#CUSTKEY",
-        "#ORDERKEY",
         "#SUPPKEY",
-        "#PARTKEY"
+        "#PARTKEY",
+        "#ORDERKEY"
         )
       schema
   }
@@ -221,8 +234,12 @@ Query Interpretation = Compilation
     case LFTJoin(parents) =>
       val SF=1
       val dataSize = SF match {
-        case 1 => Vector(25+1,5+1,10000+1,150000+1,1500000+1,6001215+1)
-        case 10 =>  Vector(25+1,5+1,100000+1,1500000+1,15000000+1,59986052+1)
+        //q5
+        /*case 1 => Vector(25+1,5+1,10000+1,150000+1,1500000+1,6001215+1)
+        case 10 =>  Vector(25+1,5+1,100000+1,1500000+1,15000000+1,59986052+1)*/
+        //q9
+        case 1 => Vector(25+1,10000+1,1500000+1,6001215+1,200000+1,800000+1)
+        case 10 =>  Vector(25+1,100000+1,15000000+1,59986052+1,2000000+1,8000000+1)
       } 
       val schemaOfResult = resultSchema(LFTJoin(parents))
       //Measure data loading and preprocessing time

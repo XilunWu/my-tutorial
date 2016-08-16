@@ -27,12 +27,20 @@ sed -i 's/|/\t/g' *.tbl
 ############################
 #     sorting
 ############################
-#  example:
+#  q5 example:
 #  sort -t$'\t' -k3,3n -k1,1n nation.csv -o nation.csv
 #  sort -t$'\t' -k4,4n -k1,1n supplier.csv -o supplier.csv
 #  sort -t$'\t' -k4,4n -k1,1n customer.csv -o customer.csv
 #  sort -t$'\t' -k2,2n -k1,1n orders.csv -o orders.csv
 #  sort -t$'\t' -k1,1n -k3,3n -k2,2n lineitem.csv -o lineitem.csv
+
+#  q9 example:
+#  sort -t$'\t' -k1,1n nation.csv -o nation.csv
+#  sort -t$'\t' -k4,4n -k1,1n supplier.csv -o supplier.csv
+#  sort -t$'\t' -k1,1n orders.csv -o orders.csv
+#  sort -t$'\t' -k3,3n -k2,2n -k1,1n lineitem.csv -o lineitem.csv
+#  sort -t$'\t' -k1,1n part.csv -o part.csv
+#  sort -t$'\t' -k2,2n -k1,1n partsupp.csv -o partsupp.csv
 
 
 ############################
