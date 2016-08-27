@@ -187,11 +187,13 @@ Query Interpretation = Compilation
     case PrintCSV(parent)        => Schema()
     case LFTJoin(parents)        =>
       val schema = Schema(
+        "#REGIONKEY",
         "#NATIONKEY",
         "N_NAME",
+        "#CUSTKEY",
+        "#ORDERKEY",
         "#SUPPKEY",
-        "#PARTKEY",
-        "#ORDERKEY"
+        "#PARTKEY"
         )
       schema
   }
@@ -235,11 +237,11 @@ Query Interpretation = Compilation
       val SF=1
       val dataSize = SF match {
         //q5
-        /*case 1 => Vector(25+1,5+1,10000+1,150000+1,1500000+1,6001215+1)
-        case 10 =>  Vector(25+1,5+1,100000+1,1500000+1,15000000+1,59986052+1)*/
+        case 1 => Vector(25+1,5+1,10000+1,150000+1,1500000+1,6001215+1)
+        case 10 =>  Vector(25+1,5+1,100000+1,1500000+1,15000000+1,59986052+1)
         //q9
-        case 1 => Vector(25+1,10000+1,1500000+1,6001215+1,200000+1,800000+1)
-        case 10 =>  Vector(25+1,100000+1,15000000+1,59986052+1,2000000+1,8000000+1)
+        /*case 1 => Vector(25+1,10000+1,1500000+1,6001215+1,200000+1,800000+1)
+        case 10 =>  Vector(25+1,100000+1,15000000+1,59986052+1,2000000+1,8000000+1)*/
       } 
       val schemaOfResult = resultSchema(LFTJoin(parents))
       //Measure data loading and preprocessing time
@@ -381,22 +383,6 @@ Data Structure Implementations
         //if less than 5 elements, do linear search instead of b-search
         if (vend - vstart < 5) {vstart = lsearch(lv,seekKey,vstart,vend); vend = vstart}
         else {
-          //implement minus operator for RField
-          /*
-          print(lv)
-          print(" ")
-          print(vend - vstart)
-          print(" ")
-          print(seekKey - valueArray(vstart,lv)) 
-          print(" ")
-          print(vstart)
-          print(" ")
-          print(vstart + (1.0 * (seekKey - valueArray(vstart,lv)) * (vend - vstart - 1) 
-            / (valueArray(vend-1,lv) - valueArray(vstart,lv))).toInt)
-          print(" ")
-          print(valueArray(vend-1,lv) - valueArray(vstart,lv)) 
-          print(" ")
-          println(vend)*/
           var diff = seekKey - valueArray(vstart,lv)
           var range = valueArray(vend-1,lv) - valueArray(vstart,lv)
           if (diff <=0 ) vend = vstart
@@ -595,25 +581,21 @@ Data Structure Implementations
       --------------------------
       */
   class LFTJmain (rels : List[TrieArray], schema: Schema){
+    //ArrayBuffer(1,schema) is inefficient
     val maxkeys = new ArrayBuffer(1, schema)
     val minkeys = new ArrayBuffer(1, schema)
     var currLv = 0
     val res = new ArrayBuffer(1, schema)
     def run(yld: Record => Rep[Unit]) = {
       while (currLv != -1) {
-        unlift(leapFrogJoin)(yld, currLv, schema.length) //return -1 if not found
+        unlift(leapFrogJoin)(yld, currLv, schema.length) 
       }
       //reset all variables
       currLv = 0
       rels foreach {r => r.resetCursor}
     }
-    //Can we write leapFrogJoin in a reversal style?
     def leapFrogJoin(level: Int, yld: Record => Rep[Unit]): Rep[Unit] = {
-      //!!!
-      //200 lines code for search() function. reduce!
       if (rels.filter(r => r.hasCol(level)).length > 1) search(level)
-      /* need modification here. for each relation, the case is diff! */
-      //optimize here?
       if (level == schema.length - 1) {
         if (atEnd(level)) {currLv -= 1; next(level-1)}
         else {pushIntoRes(level, key(level)); next(level); yld(makeRecord)}
@@ -628,8 +610,7 @@ Data Structure Implementations
         f(count,yld)
       else if (lowerBound <= count && count < upperBound - 1)
         unlift(f)(yld, numUnLift, upperBound, lowerBound, count + 1)
-      else
-        f(upperBound - 1, yld)
+      else unit() //exit
     }
     //check atEnd after calling next()
     def next(level: Int): Rep[Unit] = {

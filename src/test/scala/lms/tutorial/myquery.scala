@@ -177,8 +177,8 @@ class LFTjoinQueryTest extends TutorialFunSuite {
   val t1gram = "? schema Phrase, Year, MatchCount, VolumeCount delim \\t"
 
   //testquery("t1gram1", s"select * from $t1gram")
-  //testquery("lftj_q5", "")
-  testquery("lftj_q9","")
+  testquery("lftj_q5", "")
+  //testquery("lftj_q9","")
 }
 
 
