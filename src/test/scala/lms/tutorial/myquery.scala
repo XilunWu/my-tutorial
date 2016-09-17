@@ -103,27 +103,27 @@ class LFTjoinQueryTest extends TutorialFunSuite {
 
   // NOTE: we can use "select * from ?" to use dynamic file names (not used here right now)
 
+  val query = "Q5"
+  val sf = 1
   trait ExpectedASTs extends QueryAST {
     val scan_t = Scan("t.csv")
-    val querytest = "Q5"
-    val SF = 1
-    val postfix = SF match {
-      case 1 => ".csv"
-      case 10 => ".tbl"
+    val postfix = sf match {
+      case 1 => ".1"
+      case 10 => ".10"
     }
     val scan_1gram = Scan("1gram.csv",Some(Schema("Phrase", "Year", "MatchCount", "VolumeCount")),Some('\t'))
     val scan_t1gram = Scan("t1gram.csv",Some(Schema("Phrase", "Year", "MatchCount", "VolumeCount")),Some('\t'))
-    val scan_customer = Scan("../../../data/"+querytest+"/customer"+postfix,Some(Schema("#CUSTKEY","C_NAME","C_ADDRESS","#NATIONKEY","PHONE","ACCTBAL","MKTSEGMENT","C_COMMENT")),Some('\t'))
-    val scan_nation = Scan("../../../data/"+querytest+"/nation"+postfix,Some(Schema("#NATIONKEY","N_NAME","#REGIONKEY","N_COMMENT")),Some('\t'))
-    val scan_region = Scan("../../../data/"+querytest+"/region"+postfix,Some(Schema("#REGIONKEY","R_NAME","R_COMMENT")),Some('\t'))
-    val scan_lineitem = Scan("../../../data/"+querytest+"/lineitem"+postfix,Some(Schema("#ORDERKEY","#PARTKEY","#SUPPKEY","#LINENUMBER","#QUANTITY","EXTENDEDPRICE","DISCOUNT","TAX","RETURNFLAG","LINESTATUS","#SHIPDATE","#COMMITDATE","#RECEIPTDATE","SHIPINSTRUCT","SHIPMODE","L_COMMENT")),Some('\t'))
-    val scan_orders = Scan("../../../data/"+querytest+"/orders"+postfix,Some(Schema("#ORDERKEY","#CUSTKEY","ORDERSTATUS","TOTALPRICE","#ORDERDATE","ORDERPRIORITY","CLERK","#SHIPPRIORITY","O_COMMENT")),Some('\t'))
-    val scan_supplier = Scan("../../../data/"+querytest+"/supplier"+postfix,Some(Schema("#SUPPKEY","S_NAME","S_ADDRESS","#NATIONKEY","S_PHONE","S_ACCTBAL","S_COMMENT")),Some('\t'))
-    val scan_part = Scan("../../../data/"+querytest+"/part"+postfix,Some(Schema("#PARTKEY","P_NAME","P_MFGR","P_BRAND","P_TYPE","P_SIZE","P_CONTAINER","P_RETAILPRICE","P_COMMENT")),Some('\t'))
-    val scan_partsupp = Scan("../../../data/"+querytest+"/partsupp"+postfix,Some(Schema("#PARTKEY","#SUPPKEY","PS_AVAILQTY","PS_SUPPLYCOST","PS_COMMENT")),Some('\t'))
+    val scan_customer = Scan("../../../data/"+query+"/customer"+postfix,Some(Schema("#CUSTKEY","C_NAME","C_ADDRESS","#NATIONKEY","PHONE","ACCTBAL","MKTSEGMENT","C_COMMENT")),Some('\t'))
+    val scan_nation = Scan("../../../data/"+query+"/nation"+postfix,Some(Schema("#NATIONKEY","N_NAME","#REGIONKEY","N_COMMENT")),Some('\t'))
+    val scan_region = Scan("../../../data/"+query+"/region"+postfix,Some(Schema("#REGIONKEY","R_NAME","R_COMMENT")),Some('\t'))
+    val scan_lineitem = Scan("../../../data/"+query+"/lineitem"+postfix,Some(Schema("#ORDERKEY","#PARTKEY","#SUPPKEY","#LINENUMBER","#QUANTITY","EXTENDEDPRICE","DISCOUNT","TAX","RETURNFLAG","LINESTATUS","#SHIPDATE","#COMMITDATE","#RECEIPTDATE","SHIPINSTRUCT","SHIPMODE","L_COMMENT")),Some('\t'))
+    val scan_orders = Scan("../../../data/"+query+"/orders"+postfix,Some(Schema("#ORDERKEY","#CUSTKEY","ORDERSTATUS","TOTALPRICE","#ORDERDATE","ORDERPRIORITY","CLERK","#SHIPPRIORITY","O_COMMENT")),Some('\t'))
+    val scan_supplier = Scan("../../../data/"+query+"/supplier"+postfix,Some(Schema("#SUPPKEY","S_NAME","S_ADDRESS","#NATIONKEY","S_PHONE","S_ACCTBAL","S_COMMENT")),Some('\t'))
+    val scan_part = Scan("../../../data/"+query+"/part"+postfix,Some(Schema("#PARTKEY","P_NAME","P_MFGR","P_BRAND","P_TYPE","P_SIZE","P_CONTAINER","P_RETAILPRICE","P_COMMENT")),Some('\t'))
+    val scan_partsupp = Scan("../../../data/"+query+"/partsupp"+postfix,Some(Schema("#PARTKEY","#SUPPKEY","PS_AVAILQTY","PS_SUPPLYCOST","PS_COMMENT")),Some('\t'))
 
     val expectedAstForTest = Map(
-      "lftj_q5" -> Group(Schema("N_NAME"), Schema("#COUNT"),  //Here we need hack Group to support count(*)
+      "Q5" -> Group(Schema("N_NAME"), Schema("#COUNT"),  //Here we need hack Group to support count(*)
         LFTJoin(List(
           Project(Schema("#REGIONKEY","#NATIONKEY","N_NAME"), Schema("#REGIONKEY","#NATIONKEY","N_NAME"), scan_nation),
           Project(Schema("#REGIONKEY"), Schema("#REGIONKEY"), Filter(Eq(Field("R_NAME"), Value("ASIA")), scan_region)),
@@ -146,7 +146,7 @@ class LFTjoinQueryTest extends TutorialFunSuite {
             Schema("#ORDERKEY","#SUPPKEY","#PARTKEY"),
             scan_lineitem)
         ))),
-      "lftj_q9" -> Group(Schema("N_NAME"), Schema("#COUNT"),
+      "Q9" -> Group(Schema("N_NAME"), Schema("#COUNT"),
         LFTJoin(List(
           Project(Schema("#NATIONKEY","N_NAME"), Schema("#NATIONKEY","N_NAME"), scan_nation),
           Project(
@@ -178,8 +178,7 @@ class LFTjoinQueryTest extends TutorialFunSuite {
   val t1gram = "? schema Phrase, Year, MatchCount, VolumeCount delim \\t"
 
   //testquery("t1gram1", s"select * from $t1gram")
-  testquery("lftj_q5", "")
-  //testquery("lftj_q9","")
+  testquery(query, "")
 }
 
 

@@ -14,6 +14,17 @@ object query_optc {
 trait QueryCompiler extends Dsl with StagedQueryProcessor
 with ScannerLowerBase {
   override def version = "query_optc"
+  val queryNumber = "Q5"
+  val sf = 1
+  val tableSize = sf match {
+    case 1 => Vector(10,30,10001,150001,200001,800001,1500001,6001216)
+    case 10 => Vector(10,30,100001,1500001,2000001,8000001,15000001,59986053)
+  }
+  val tablesInQuery = queryNumber match {
+    case "Q5" => Vector("NATION","REGION","SUPP","CUSTOMER","ORDERS","LINEITEM")
+    case "Q9" => Vector("NATION","SUPP","ORDERS","LINEITEM","PART","PARTSUPP")
+  }
+  val tpchTables = Vector("REGION","NATION","SUPP","CUSTOMER","PART","PARTSUPP","ORDERS","LINEITEM")
 
 /**
 Input File Tokenizer
@@ -188,24 +199,23 @@ Query Interpretation = Compilation
     case HashJoin(left, right)   => resultSchema(left) ++ resultSchema(right)
     case PrintCSV(parent)        => Schema()
     case LFTJoin(parents)        =>
-      val schema = Schema(
-        /* Q5 */
-        "#REGIONKEY",
-        "#NATIONKEY",
-        "N_NAME",
-        "#CUSTKEY",
-        "#ORDERKEY",
-        "#SUPPKEY",
-        "#PARTKEY"
-        /* Q9 */
-        /*
-        "#NATIONKEY",
-        "N_NAME",
-        "#SUPPKEY",
-        "#PARTKEY",
-        "#ORDERKEY"
-        */
-        )
+      val schema = queryNumber match {
+        case "Q5" => Schema(
+          "#REGIONKEY",
+          "#NATIONKEY",
+          "N_NAME",
+          "#CUSTKEY",
+          "#ORDERKEY",
+          "#SUPPKEY",
+          "#PARTKEY")
+        case "Q9" => Schema(
+          "#NATIONKEY",
+          "N_NAME",
+          "#SUPPKEY",
+          "#PARTKEY",
+          "#ORDERKEY"
+          )
+      }
       schema
   }
 
@@ -245,17 +255,7 @@ Query Interpretation = Compilation
         }
       }
     case LFTJoin(parents) =>
-      val SF=1
-      val dataSize = SF match {
-        //q5
-        case 1 => Vector(25+1,5+1,10000+1,150000+1,1500000+1,6001215+1)
-        case 10 =>  Vector(25+1,5+1,100000+1,1500000+1,15000000+1,59986052+1)
-        //q9
-        /*
-        case 1 => Vector(25+1,10000+1,1500000+1,6001215+1,200000+1,800000+1)
-        case 10 =>  Vector(25+1,100000+1,15000000+1,59986052+1,2000000+1,8000000+1)
-        */
-      } 
+      val dataSize = tablesInQuery.map(t => tableSize(tpchTables indexOf t)) 
       val schemaOfResult = resultSchema(LFTJoin(parents))
       //Measure data loading and preprocessing time
       unchecked[Unit]("clock_t begin, end; double time_spent")
