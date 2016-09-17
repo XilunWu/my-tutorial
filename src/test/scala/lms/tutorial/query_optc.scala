@@ -98,9 +98,11 @@ Low-Level Processing Logic
       //
       var nmatch = 0
       var i = 0
-      while (nmatch != len2 && i < len) {
-        if (data.charAt(i) == data2.charAt(nmatch)) nmatch += 1
-        else nmatch = 0
+      //need fix
+
+      while (nmatch != len2 && i < len-len2) {
+        while (data.charAt(i+nmatch) == data2.charAt(nmatch)) nmatch += 1
+        nmatch = if (nmatch == len2) nmatch else 0
         i += 1
       }
       nmatch == len2
@@ -187,6 +189,7 @@ Query Interpretation = Compilation
     case PrintCSV(parent)        => Schema()
     case LFTJoin(parents)        =>
       val schema = Schema(
+        /* Q5 */
         "#REGIONKEY",
         "#NATIONKEY",
         "N_NAME",
@@ -194,6 +197,14 @@ Query Interpretation = Compilation
         "#ORDERKEY",
         "#SUPPKEY",
         "#PARTKEY"
+        /* Q9 */
+        /*
+        "#NATIONKEY",
+        "N_NAME",
+        "#SUPPKEY",
+        "#PARTKEY",
+        "#ORDERKEY"
+        */
         )
       schema
   }
@@ -240,8 +251,10 @@ Query Interpretation = Compilation
         case 1 => Vector(25+1,5+1,10000+1,150000+1,1500000+1,6001215+1)
         case 10 =>  Vector(25+1,5+1,100000+1,1500000+1,15000000+1,59986052+1)
         //q9
-        /*case 1 => Vector(25+1,10000+1,1500000+1,6001215+1,200000+1,800000+1)
-        case 10 =>  Vector(25+1,100000+1,15000000+1,59986052+1,2000000+1,8000000+1)*/
+        /*
+        case 1 => Vector(25+1,10000+1,1500000+1,6001215+1,200000+1,800000+1)
+        case 10 =>  Vector(25+1,100000+1,15000000+1,59986052+1,2000000+1,8000000+1)
+        */
       } 
       val schemaOfResult = resultSchema(LFTJoin(parents))
       //Measure data loading and preprocessing time
@@ -260,8 +273,19 @@ Query Interpretation = Compilation
       unchecked[Unit]("end = clock(); printf(\"Trie building: %f\\n\", (double)(end - begin) / CLOCKS_PER_SEC)")
       //Measure join time
       /* do it 5 times */
+      /* 
+       * in run(), we reset currLv = 0. However, in this way of loop, this assignment is eleminated.
+       */
+      /*
+      val i = Vector[Int](1,2,3,4,5)
+      i.foreach { x =>
+        unchecked[Unit]("begin = clock()")
+        join.run(yld)
+        unchecked[Unit]("end = clock(); printf(\"Join: %f\\n\", (double)(end - begin) / CLOCKS_PER_SEC)")
+      }
+      */
       var i = 0
-      while(i < 5) {
+      while(i < 1) {
         unchecked[Unit]("begin = clock()")
         join.run(yld)
         unchecked[Unit]("end = clock(); printf(\"Join: %f\\n\", (double)(end - begin) / CLOCKS_PER_SEC)")
