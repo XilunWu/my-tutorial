@@ -303,10 +303,8 @@ Data Structure Implementations
 ------------------------------
 */
   def access(i: Rep[Int], len: Int)(f: Int => Rep[Unit]): Rep[Unit] = {
-    if(i >= len)
-      f(0)
-    else
-      accessHelp(i, len, 0)(f)
+    if(i < 0) unit()
+    else accessHelp(i, len, 0)(f)
   }
   def accessHelp(i: Rep[Int], len: Int, count: Int)(f: Int => Rep[Unit]): Rep[Unit] = {
     if (i == count)
@@ -314,13 +312,14 @@ Data Structure Implementations
     else if (count < len - 1)
       accessHelp(i, len, count + 1)(f)
     else
-      f(len-1)
+      unit()
   }
   class TrieArray (dataSize: Int, schema: Schema, schemaOfResult: Schema) {
     var len = 0
     val valueArray = new ArrayBuffer(dataSize, schema)
     val indexArray = schema.map(f => NewArray[Int](dataSize))
     val lenArray = NewArray[Int](schema.length)
+    val cursor = NewArray[Int](schema.length)
     val flagTable = schemaOfResult.map(f => schema contains f)
     val levelTable = schema.map(f => schemaOfResult indexOf f)
     def hasCol(i: Int): Boolean = (i >= 0) && (i < schemaOfResult.length) && flagTable(i)
@@ -331,6 +330,7 @@ Data Structure Implementations
     }
     def toTrieArray: Rep[Unit] = {
       val lastRecord = new ArrayBuffer(1,schema)
+      //initialization
       lastRecord.update(0,schema.map{
         case hd if isNumericCol(hd) => RInt(-1)
         case _ => RString("",0)
@@ -343,6 +343,15 @@ Data Structure Implementations
         while (j < schema.length) {
           access(j, schema.length){j =>
             val curr_value = valueArray(i,j)
+            /*
+              int32_t x965 = x951;
+              int32_t x966 = x17[x965];
+              bool x967 = x953;
+              int32_t x968 = x941[0];
+              bool x969 = x968 == x966;
+              bool x970 = !x969;
+              bool x971 = x967 || x970;
+            */
             if (diff || !(lastRecord(0,j) compare curr_value)) {
               valueArray.update(next(j), j, curr_value)
               if (j != schema.length - 1) indexArray(j)(next(j)) = next(j+1)
@@ -369,7 +378,6 @@ Data Structure Implementations
       while (k < schema.length) {println(lenArray(k)); k += 1}
       println("")*/
     }
-    val cursor = NewArray[Int](schema.length)
 
     def key(level:Int): RField = {
       val lv:Int = levelOf(level)
@@ -456,6 +464,116 @@ Data Structure Implementations
         cursor(i) = 0
         i += 1
       }
+    }
+  }
+
+  abstract class ColBuffer
+  case class IntColBuffer(data: Rep[Array[Int]]) extends ColBuffer
+  case class StringColBuffer(data: Rep[Array[String]], len: Rep[Array[Int]]) extends ColBuffer
+
+  class ArrayBuffer(dataSize: Int, schema: Schema) {
+    val buf = schema.map {
+      case hd if isNumericCol(hd) => IntColBuffer(NewArray[Int](dataSize))
+      case _ => StringColBuffer(NewArray[String](dataSize), NewArray[Int](dataSize))
+    }
+    var len = 0
+    def +=(x: Fields) = {
+      this(len) = x
+      len += 1
+    }
+    def update(i: Rep[Int], x: Fields) = (buf,x).zipped.foreach {
+      case (IntColBuffer(b), RInt(x)) => b(i) = x
+      case (StringColBuffer(b,l), RString(x,y)) => b(i) = x; l(i) = y
+    }
+    def update(i: Rep[Int], j: Int, x: RField) = (buf(j),x) match {
+      case (IntColBuffer(b), RInt(x)) => b(i) = x
+      case (StringColBuffer(b,l), RString(x,y)) => b(i) = x; l(i) = y
+    }
+    def apply(i: Rep[Int]) = buf.map {
+      case IntColBuffer(b) => RInt(b(i))
+      case StringColBuffer(b,l) => RString(b(i),l(i))
+    }
+    def apply(i: Rep[Int], j: Int) = buf(j) match {
+      case IntColBuffer(b) => RInt(b(i))
+      case StringColBuffer(b,l) => RString(b(i),l(i))
+    }
+  }
+
+  /**
+      Trie-Join
+      --------------------------
+      */
+  class LFTJmain (rels : List[TrieArray], schema: Schema){
+    //ArrayBuffer(1,schema) is inefficient
+    val maxkeys = new ArrayBuffer(1, schema)
+    val minkeys = new ArrayBuffer(1, schema)
+    val res = new ArrayBuffer(1, schema)
+    var currLv = 0
+    def run(yld: Record => Rep[Unit]) = {
+      while (currLv != -1) {
+        unlift(leapFrogJoin)(yld, currLv, schema.length) 
+      }
+      //reset all variables
+      currLv = 0
+      rels foreach {r => r.resetCursor}
+    }
+    def leapFrogJoin(level: Int, yld: Record => Rep[Unit]): Rep[Unit] = {
+      if (rels.filter(r => r.hasCol(level)).length > 1) search(level)
+      if (level == schema.length - 1) {
+        if (atEnd(level)) {currLv -= 1; next(level-1)}
+        else {pushIntoRes(level, key(level)); next(level); yld(makeRecord)}
+      }
+      else {
+        if (atEnd(level)) {currLv -= 1; next(level-1)}
+        else {pushIntoRes(level, key(level)); currLv += 1; open(level+1)}
+      }
+    }
+    def unlift(f: (Int, Record => Rep[Unit]) => Rep[Unit])(yld: Record => Rep[Unit], numUnLift: Rep[Int], upperBound: Int, lowerBound: Int = 0, count: Int = 0): Rep[Unit] = {
+      if (numUnLift == count)
+        f(count,yld)
+      else if (lowerBound <= count && count < upperBound - 1)
+        unlift(f)(yld, numUnLift, upperBound, lowerBound, count + 1)
+      else unit() //exit
+    }
+    //check atEnd after calling next()
+    def next(level: Int): Rep[Unit] = {
+      //call iterator.next for every iterator in vector
+      rels.filter(r => r.hasCol(level)) foreach {r => r.next(level)}
+    }
+    def search(level: Int): Rep[Unit] = {
+      //maxkeys and minkeys should be ArrayBuffer(1,schema)
+      while({
+        var flag = atEnd(level)
+        if (flag == true) false
+        else {
+          //better logic here?
+          val kArray = keys(level)
+          minkeys.update(0, level, kArray(0))
+          maxkeys.update(0, level, kArray(0))
+          kArray foreach {k => 
+            if (k lessThan minkeys(0,level))
+              minkeys.update(0,level,k)
+            if(maxkeys(0,level) lessThan k)              
+              maxkeys.update(0,level,k)
+          }
+          !(maxkeys(0,level) compare minkeys(0,level))
+        }
+      }) {
+        rels.filter(r => r.hasCol(level)) foreach {r => r.seek(level, maxkeys(0,level))}
+      }
+    }
+    def key(level: Int) = keys(level)(0)
+    def keys(level: Int) = {
+      val array = rels.filter(r => r.hasCol(level)).map{r => r.key(level)}
+      array
+    }
+    def atEnd(level: Int): Rep[Boolean] = rels.filter(r => r.hasCol(level)).foldLeft(unit(false))((a, x) => a || x.atEnd(level))
+    def open(level:Int): Rep[Unit] = rels.filter(r => r.hasCol(level)).foreach(r => r.open(level))
+    def makeRecord: Record = {
+      Record(res(0), schema)
+    }
+    def pushIntoRes(level: Int, key: RField) = {
+      res.update(0,level,key)
     }
   }
 
@@ -568,115 +686,4 @@ Data Structure Implementations
     }
   }
 
-  abstract class ColBuffer
-  case class IntColBuffer(data: Rep[Array[Int]]) extends ColBuffer
-  case class StringColBuffer(data: Rep[Array[String]], len: Rep[Array[Int]]) extends ColBuffer
-
-  class ArrayBuffer(dataSize: Int, schema: Schema) {
-    val buf = schema.map {
-      case hd if isNumericCol(hd) => IntColBuffer(NewArray[Int](dataSize))
-      case _ => StringColBuffer(NewArray[String](dataSize), NewArray[Int](dataSize))
-    }
-    var len = 0
-    def +=(x: Fields) = {
-      this(len) = x
-      len += 1
-    }
-    def update(i: Rep[Int], x: Fields) = (buf,x).zipped.foreach {
-      case (IntColBuffer(b), RInt(x)) => b(i) = x
-      case (StringColBuffer(b,l), RString(x,y)) => b(i) = x; l(i) = y
-    }
-    def update(i: Rep[Int], j: Int, x: RField) = (buf(j),x) match {
-      case (IntColBuffer(b), RInt(x)) => b(i) = x
-      case (StringColBuffer(b,l), RString(x,y)) => b(i) = x; l(i) = y
-    }
-    def apply(i: Rep[Int]) = buf.map {
-      case IntColBuffer(b) => RInt(b(i))
-      case StringColBuffer(b,l) => RString(b(i),l(i))
-    }
-    def apply(i: Rep[Int], j: Int) = buf(j) match {
-      case IntColBuffer(b) => RInt(b(i))
-      case StringColBuffer(b,l) => RString(b(i),l(i))
-    }
-  }
-
-  /**
-      Trie-Join
-      --------------------------
-      */
-  class LFTJmain (rels : List[TrieArray], schema: Schema){
-    //ArrayBuffer(1,schema) is inefficient
-    val maxkeys = new ArrayBuffer(1, schema)
-    val minkeys = new ArrayBuffer(1, schema)
-    var currLv = 0
-    val res = new ArrayBuffer(1, schema)
-    def run(yld: Record => Rep[Unit]) = {
-      while (currLv != -1) {
-        unlift(leapFrogJoin)(yld, currLv, schema.length) 
-      }
-      //reset all variables
-      currLv = 0
-      rels foreach {r => r.resetCursor}
-    }
-    def leapFrogJoin(level: Int, yld: Record => Rep[Unit]): Rep[Unit] = {
-      if (rels.filter(r => r.hasCol(level)).length > 1) search(level)
-      if (level == schema.length - 1) {
-        if (atEnd(level)) {currLv -= 1; next(level-1)}
-        else {pushIntoRes(level, key(level)); next(level); yld(makeRecord)}
-      }
-      else {
-        if (atEnd(level)) {currLv -= 1; next(level-1)}
-        else {pushIntoRes(level, key(level)); currLv += 1; open(level+1)}
-      }
-    }
-    def unlift(f: (Int, Record => Rep[Unit]) => Rep[Unit])(yld: Record => Rep[Unit], numUnLift: Rep[Int], upperBound: Int, lowerBound: Int = 0, count: Int = 0): Rep[Unit] = {
-      if (numUnLift == count)
-        f(count,yld)
-      else if (lowerBound <= count && count < upperBound - 1)
-        unlift(f)(yld, numUnLift, upperBound, lowerBound, count + 1)
-      else unit() //exit
-    }
-    //check atEnd after calling next()
-    def next(level: Int): Rep[Unit] = {
-      //call iterator.next for every iterator in vector
-      rels.filter(r => r.hasCol(level)) foreach {r => r.next(level)}
-    }
-    def search(level: Int): Rep[Unit] = {
-      //maxkeys and minkeys should be ArrayBuffer(1,schema)
-      while({
-        var flag = atEnd(level)
-        if (flag == true) false
-        else {
-          val kArray = keys(level)
-          //Does update take too many operations? 
-          //seems it does all 7 assignments. 
-          //minkeys maxkeys res
-          minkeys.update(0, level, kArray(0))
-          maxkeys.update(0, level, kArray(0))
-          kArray foreach {k => 
-            if (k lessThan minkeys(0,level))
-              minkeys.update(0,level,k)
-            if(maxkeys(0,level) lessThan k)              
-              maxkeys.update(0,level,k)
-          }
-          !(maxkeys(0,level) compare minkeys(0,level))
-        }
-      }) {
-        rels.filter(r => r.hasCol(level)) foreach {r => r.seek(level, maxkeys(0,level))}
-      }
-    }
-    def key(level: Int) = keys(level)(0)
-    def keys(level: Int) = {
-      val array = rels.filter(r => r.hasCol(level)).map{r => r.key(level)}
-      array
-    }
-    def atEnd(level: Int): Rep[Boolean] = rels.filter(r => r.hasCol(level)).foldLeft(unit(false))((a, x) => a || x.atEnd(level))
-    def open(level:Int): Rep[Unit] = rels.filter(r => r.hasCol(level)).foreach(r => r.open(level))
-    def makeRecord: Record = {
-      Record(res(0), schema)
-    }
-    def pushIntoRes(level: Int, key: RField) = {
-      res.update(0,level,key)
-    }
-  }
 }}
