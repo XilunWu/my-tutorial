@@ -453,6 +453,10 @@ Data Structure Implementations
       --------------------------
       */
   class LFTJmain (rels : List[TrieArray], schema: Schema){
+    //ArrayBuffer(1,schema) is inefficient
+    val maxkeys = new ArrayBuffer(1, schema)
+    val minkeys = new ArrayBuffer(1, schema)
+    val res = new ArrayBuffer(1, schema)
     var currLv = 0
     def run(yld: Record => Rep[Unit]) = {
       while (currLv != -1) {
@@ -486,25 +490,23 @@ Data Structure Implementations
       rels.filter(r => r.hasCol(level)) foreach {r => r.next(level)}
     }
     def search(level: Int): Rep[Unit] = {
-      //maxkeys and minkeys should be ArrayBuffer(1,schema)
-      while({
-        var flag = atEnd(level)
-        if (flag == true) false
-        else {
-          //better logic here?
-          val kArray = keys(level)
-          minkeys.update(0, level, kArray(0))
-          maxkeys.update(0, level, kArray(0))
-          kArray foreach {k => 
-            if (k lessThan minkeys(0,level))
-              minkeys.update(0,level,k)
-            if(maxkeys(0,level) lessThan k)              
-              maxkeys.update(0,level,k)
-          }
-          !(maxkeys(0,level) compare minkeys(0,level))
+      val ops = rels.filter(r => r.hasCol(level))
+      var keyFound = false
+      while (!keyFound || !atEnd(level)) {
+        val kArray = keys(level)
+        minkeys.update(0, level, kArray(0))
+        maxkeys.update(0, level, kArray(0))
+        kArray foreach {k => 
+          if (k lessThan minkeys(0,level))
+            minkeys.update(0,level,k)
+          if(maxkeys(0,level) lessThan k)              
+            maxkeys.update(0,level,k)
         }
-      }) {
-        rels.filter(r => r.hasCol(level)) foreach {r => r.seek(level, maxkeys(0,level))}
+        keyFound = maxkeys(0,level) compare minkeys(0,level)
+        if (!keyFound) ops.foreach { r => 
+          r.seek(level, maxkeys(0,level))
+          if (!r.atEnd) maxkeys.update(0,level,k)
+        }
       }
     }
     def key(level: Int) = keys(level)(0)
