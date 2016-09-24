@@ -268,22 +268,8 @@ Query Interpretation = Compilation
       unchecked[Unit]("end = clock(); printf(\"Data loading: %f\\n\", (double)(end - begin) / CLOCKS_PER_SEC)")
       //Measure trie building time
       unchecked[Unit]("begin = clock()")
-      trieArrays foreach {arr => arr.toTrieArray}
       val join = new LFTJmain(trieArrays, schemaOfResult)
       unchecked[Unit]("end = clock(); printf(\"Trie building: %f\\n\", (double)(end - begin) / CLOCKS_PER_SEC)")
-      //Measure join time
-      /* do it 5 times */
-      /* 
-       * in run(), we reset currLv = 0. However, in this way of loop, this assignment is eleminated.
-       */
-      /*
-      val i = Vector[Int](1,2,3,4,5)
-      i.foreach { x =>
-        unchecked[Unit]("begin = clock()")
-        join.run(yld)
-        unchecked[Unit]("end = clock(); printf(\"Join: %f\\n\", (double)(end - begin) / CLOCKS_PER_SEC)")
-      }
-      */
       var i = 0
       while(i < 1) {
         unchecked[Unit]("begin = clock()")
@@ -315,94 +301,59 @@ Data Structure Implementations
       unit()
   }
   class TrieArray (dataSize: Int, schema: Schema, schemaOfResult: Schema) {
-    var len = 0
     val valueArray = new ArrayBuffer(dataSize, schema)
     val indexArray = schema.map(f => NewArray[Int](dataSize))
-    val lenArray = NewArray[Int](schema.length)
-    val cursor = NewArray[Int](schema.length)
+    val lenArray = schema.map{f => var_new[Int](0)}
+    val cursor = schema.map{f => var_new[Int](0)}
     val flagTable = schemaOfResult.map(f => schema contains f)
     val levelTable = schema.map(f => schemaOfResult indexOf f)
     def hasCol(i: Int): Boolean = (i >= 0) && (i < schemaOfResult.length) && flagTable(i)
     def levelOf(i : Int): Int = levelTable indexOf i
-    def +=(x: Fields) = {
-      valueArray += x
-      len += 1
-    }
-    def toTrieArray: Rep[Unit] = {
-      val lastRecord = new ArrayBuffer(1,schema)
-      //initialization
-      lastRecord.update(0,schema.map{
-        case hd if isNumericCol(hd) => RInt(-1)
-        case _ => RString("",0)
-        })
-      val next = NewArray[Int](schema.length)
-      var i = 0; var j = 0
+    def +=(x: Fields):Rep[Unit] = {
       var diff = false
-      while(i < len) {
-        diff = false
-        while (j < schema.length) {
-          access(j, schema.length){j =>
-            val curr_value = valueArray(i,j)
-            /*
-              int32_t x965 = x951;
-              int32_t x966 = x17[x965];
-              bool x967 = x953;
-              int32_t x968 = x941[0];
-              bool x969 = x968 == x966;
-              bool x970 = !x969;
-              bool x971 = x967 || x970;
-            */
-            if (diff || !(lastRecord(0,j) compare curr_value)) {
-              valueArray.update(next(j), j, curr_value)
-              if (j != schema.length - 1) indexArray(j)(next(j)) = next(j+1)
-              lastRecord.update(0,j,curr_value)
-              next(j) = next(j) + 1
-              diff = true
-            }
-          }
-          j += 1
+      x.foreach { xx =>
+        val i = x indexOf xx
+        if (lenArray(i) == 0) diff = true
+        else if (!diff) diff = !(valueArray((lenArray(i)-1),i) compare xx)
+        if (diff) {
+          valueArray.update(lenArray(i),i,xx)
+          if (i != schema.length - 1) indexArray(i)(lenArray(i)) = lenArray(i+1)          
+          lenArray(i)+=1
         }
-        i += 1
-        j = 0
       }
-      //for the last row
-      while (j < schema.length - 1) {
-        access(j, schema.length) { j =>
-          indexArray(j)(next(j)) = next(j+1)
-        }
-        lenArray(j) = next(j)
-        j += 1
-      }
-      lenArray(j) = next(j)
-      /*var k = 0
-      while (k < schema.length) {println(lenArray(k)); k += 1}
-      println("")*/
     }
-
+    def output:Rep[Unit] = {
+      schema.foreach{ a =>
+        val i = schema indexOf a
+        var j = 0
+        while (j < lenArray(i)) {valueArray(j,i).print; print(" "); j+=1}
+        println("")
+      }
+    }
     def key(level:Int): RField = {
       val lv:Int = levelOf(level)
       valueArray(cursor(lv),lv)
     }
     def open(level:Int): Rep[Unit] = {
       val lv:Int = levelOf(level)
-      if (lv == 0) cursor(lv) = 0
-      else cursor(lv) = indexArray(lv-1)(cursor(lv-1))
+      if (lv == 0) var_assign(cursor(lv),0)
+      else var_assign(cursor(lv),indexArray(lv-1)(cursor(lv-1)))
     }
     def next(level:Int): Rep[Unit] = {
       val lv:Int = levelOf(level)
-      cursor(lv) = cursor(lv) + 1
+      cursor(lv) += 1
     }
     def atEnd(level:Int): Rep[Boolean] = {
       val lv:Int = levelOf(level)
       if (lv == 0 && cursor(lv) == lenArray(lv)) true
-      else if (lv != 0 && cursor(lv) == indexArray(lv - 1)(cursor(lv - 1) + 1)) true
+      else if (lv != 0 && cursor(lv) == indexArray(lv-1)(cursor(lv-1)+1)) true
       else false
     }
     def seek(level:Int, seekKey: RField): Rep[Unit] = {
       val lv:Int = levelOf(level)
-      val start = cursor(lv)
+      val start = readVar(cursor(lv))
       if (!(valueArray(cursor(lv),lv) compare seekKey)) {
-        val end = if (lv == 0) lenArray(0) else indexArray(lv - 1)(cursor(lv - 1) + 1)
+        val end:Rep[Int] = if (lv == 0) lenArray(0) else indexArray(lv-1)(cursor(lv-1)+1)
         if (end - start > 256) interpolation_search(lv,seekKey,start,end)
         else bsearch(lv, seekKey, start, end)
         //interpolation_search(lv,seekKey,start,end)
@@ -429,7 +380,7 @@ Data Structure Implementations
           }
         }
       }
-      cursor(lv) = vstart
+      var_assign(cursor(lv),vstart)
     }
     def lsearch(lv:Int, seekKey: RField, start: Rep[Int], end: Rep[Int]): Rep[Int] = {
       var vstart = start
@@ -442,7 +393,7 @@ Data Structure Implementations
     }
     def bsearch(lv:Int, seekKey: RField, start: Rep[Int], end: Rep[Int]): Rep[Unit] = {
       //if the current value is the seekKey it means we don't need actually do search.
-      //there're many search strategies for searching which is data dependently. 
+      //there're many search strategies for searching which are data dependently. 
       //we want to have some optimal strategies for general data.
       var vstart = start
       var vend = end
@@ -456,13 +407,11 @@ Data Structure Implementations
           else {vend = (vstart + vend) / 2}
         }
       }
-      cursor(lv) = vstart
+      var_assign(cursor(lv),vstart)
     }
     def resetCursor = {
-      var i = 0
-      while(i < schema.length) {
-        cursor(i) = 0
-        i += 1
+      cursor.foreach{c => 
+        var_assign(c, 0)
       }
     }
   }
@@ -504,10 +453,6 @@ Data Structure Implementations
       --------------------------
       */
   class LFTJmain (rels : List[TrieArray], schema: Schema){
-    //ArrayBuffer(1,schema) is inefficient
-    val maxkeys = new ArrayBuffer(1, schema)
-    val minkeys = new ArrayBuffer(1, schema)
-    val res = new ArrayBuffer(1, schema)
     var currLv = 0
     def run(yld: Record => Rep[Unit]) = {
       while (currLv != -1) {
