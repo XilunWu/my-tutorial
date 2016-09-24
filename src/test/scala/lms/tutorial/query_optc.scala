@@ -492,15 +492,17 @@ Data Structure Implementations
     def search(level: Int): Rep[Unit] = {
       val ops = rels.filter(r => r.hasCol(level))
       var keyFound = false
+      maxkeys.update(0, level, key(level))
+      keys(level).foreach {k => 
+        if(maxkeys(0,level) lessThan k)              
+          maxkeys.update(0,level,k)    
+      }
       while (!keyFound && !atEnd(level)) {
         val kArray = keys(level)
         minkeys.update(0, level, kArray(0))
-        maxkeys.update(0, level, kArray(0))
-        kArray foreach {k => 
+        kArray foreach { k =>
           if (k lessThan minkeys(0,level))
-            minkeys.update(0,level,k)
-          if(maxkeys(0,level) lessThan k)              
-            maxkeys.update(0,level,k)
+            minkeys.update(0,level,k)    
         }
         keyFound = maxkeys(0,level) compare minkeys(0,level)
         if (!keyFound) ops.foreach { r => 
