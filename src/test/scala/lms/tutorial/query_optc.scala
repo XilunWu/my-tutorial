@@ -349,16 +349,16 @@ Data Structure Implementations
       else if (lv != 0 && cursor(lv) == indexArray(lv-1)(cursor(lv-1)+1)) true
       else false
     }
-    def seek(level:Int, seekKey: RField): Rep[Unit] = {
+    def seek(level:Int,seekKey: RField): Rep[Unit] = {
       val lv:Int = levelOf(level)
       val start = readVar(cursor(lv))
       if (!(valueArray(cursor(lv),lv) compare seekKey)) {
         val end:Rep[Int] = if (lv == 0) lenArray(0) else indexArray(lv-1)(cursor(lv-1)+1)
-        expSearch(lv,seekKey,start,end)
+        interpolation_search(lv,seekKey,start,end)
       }
     }
     //not good for encoded
-    def expSearch(lv:Int, seekKey:RField,start:Rep[Int],end:Rep[Int]):Rep[Unit] = {
+    def expSearch(lv:Int,seekKey:RField,start:Rep[Int],end:Rep[Int]):Rep[Unit] = {
       val size = end-start
       if (size == 1) {
         if (valueArray(start,lv) lessThan seekKey) var_assign(cursor(lv),end)
@@ -381,8 +381,8 @@ Data Structure Implementations
       var vend = end
       while(vstart != vend) {
         //if less than 5 elements, do linear search instead of b-search
-        if (vend - vstart < 5) {vstart = lsearch(lv,seekKey,vstart,vend); vend = vstart}
-        else {
+        /*if (vend - vstart < 5) {vstart = lsearch(lv,seekKey,vstart,vend); vend = vstart}
+        else {*/
           var diff = seekKey - valueArray(vstart,lv)
           var range = valueArray(vend-1,lv) - valueArray(vstart,lv)
           if (diff <=0 ) vend = vstart
@@ -395,7 +395,7 @@ Data Structure Implementations
             else if (pivot lessThan seekKey) {vstart = mid + 1}
             else {vend = mid}
           }
-        }
+        //}
       }
       var_assign(cursor(lv),vstart)
     }
