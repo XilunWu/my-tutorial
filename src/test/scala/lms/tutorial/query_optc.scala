@@ -354,9 +354,26 @@ Data Structure Implementations
       val start = readVar(cursor(lv))
       if (!(valueArray(cursor(lv),lv) compare seekKey)) {
         val end:Rep[Int] = if (lv == 0) lenArray(0) else indexArray(lv-1)(cursor(lv-1)+1)
-        if (end - start > 256) interpolation_search(lv,seekKey,start,end)
-        else bsearch(lv, seekKey, start, end)
-        //interpolation_search(lv,seekKey,start,end)
+        expSearch(lv,seekKey,start,end)
+      }
+    }
+    //not good for encoded
+    def expSearch(lv:Int, seekKey:RField,start:Rep[Int],end:Rep[Int]):Rep[Unit] = {
+      val size = end-start
+      if (size == 1) {
+        if (valueArray(start,lv) lessThan seekKey) var_assign(cursor(lv),end)
+        else var_assign(cursor(lv),start)
+      } else {
+        var bound = 1
+        var flag = false
+        while(bound < size && (valueArray(start+bound,lv) lessThan seekKey)) {
+          if (valueArray(start+bound,lv) compare seekKey) {var_assign(cursor(lv),start+bound);bound = size;flag = true}
+          else bound*=2
+        }
+        if(!flag) {
+          val min = if(start+bound+1 < end) start+bound+1 else end        
+          bsearch(lv,seekKey,start+bound/2,min)
+        }
       }
     }
     def interpolation_search(lv:Int, seekKey: RField, start: Rep[Int], end: Rep[Int]): Rep[Unit] = {
@@ -516,7 +533,19 @@ Data Structure Implementations
       val array = rels.filter(r => r.hasCol(level)).map{r => r.key(level)}
       array
     }
-    def atEnd(level: Int): Rep[Boolean] = rels.filter(r => r.hasCol(level)).foldLeft(unit(false))((a, x) => a || x.atEnd(level))
+    def atEnd(level: Int): Rep[Boolean] = //rels.filter(r => r.hasCol(level)).foldLeft(unit(false))((a, x) => a || x.atEnd(level))
+    {
+      val ops = rels.filter(r => r.hasCol(level))
+      val length = ops.length
+      def F(i:Int):Rep[Boolean] = {
+        if (i < length-1) {
+          if (ops(i).atEnd(level)) true
+          else F(i+1)
+        }
+        else ops(i).atEnd(level)
+      }
+      F(0)      
+    }
     def open(level:Int): Rep[Unit] = rels.filter(r => r.hasCol(level)).foreach(r => r.open(level))
     def makeRecord: Record = {
       Record(res(0), schema)
