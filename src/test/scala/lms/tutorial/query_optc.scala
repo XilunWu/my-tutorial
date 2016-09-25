@@ -487,7 +487,7 @@ Data Structure Implementations
       if (rels.filter(r => r.hasCol(level)).length > 1) search(level)
       if (level == schema.length - 1) {
         if (atEnd(level)) {currLv -= 1; next(level-1)}
-        else {pushIntoRes(level, key(level)); next(level); /*yld(makeRecord)*/}
+        else {pushIntoRes(level, key(level)); next(level); yld(makeRecord)}
       }
       else {
         if (atEnd(level)) {currLv -= 1; next(level-1)}

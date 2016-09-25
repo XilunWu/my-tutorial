@@ -123,7 +123,7 @@ class LFTjoinQueryTest extends TutorialFunSuite {
     val scan_partsupp = Scan("../../../data/"+query+"/partsupp"+postfix,Some(Schema("#PARTKEY","#SUPPKEY","PS_AVAILQTY","PS_SUPPLYCOST","PS_COMMENT")),Some('\t'))
 
     val expectedAstForTest = Map(
-      "Q5" -> //Group(Schema("N_NAME"), Schema("#COUNT"),  //Here we need hack Group to support count(*)
+      "Q5" -> Group(Schema("N_NAME"), Schema("#COUNT"),  //Here we need hack Group to support count(*)
         LFTJoin(List(
           Project(Schema("#REGIONKEY","#NATIONKEY","N_NAME"), Schema("#REGIONKEY","#NATIONKEY","N_NAME"), scan_nation),
           Project(Schema("#REGIONKEY"), Schema("#REGIONKEY"), Filter(Eq(Field("R_NAME"), Value("ASIA")), scan_region)),
@@ -145,8 +145,7 @@ class LFTjoinQueryTest extends TutorialFunSuite {
             Schema("#ORDERKEY","#SUPPKEY","#PARTKEY"),
             Schema("#ORDERKEY","#SUPPKEY","#PARTKEY"),
             scan_lineitem)
-        //)
-        )),
+        ))),
       "Q9" -> Group(Schema("N_NAME"), Schema("#COUNT"),
         LFTJoin(List(
           Project(Schema("#NATIONKEY","N_NAME"), Schema("#NATIONKEY","N_NAME"), scan_nation),
