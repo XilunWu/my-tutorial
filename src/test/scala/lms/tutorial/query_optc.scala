@@ -277,8 +277,7 @@ Query Interpretation = Compilation
       val trieArrayIterators = parents.map(p => p match {
         case Symbol(sym, schema) => new TrieArrayIterator(trieArrays(sym), schema)
         case _ => val trie = tries.next(); new TrieArrayIterator(trie, trie.schema)
-      }
-      )
+      })
       unchecked[Unit]("end = clock(); printf(\"Data loading: %f\\n\", (double)(end - begin) / CLOCKS_PER_SEC)")
       //Measure trie building time
       val join = new LFTJmain(trieArrayIterators, schemaOfResult)
@@ -289,6 +288,18 @@ Query Interpretation = Compilation
         unchecked[Unit]("end = clock(); printf(\"Join: %f\\n\", (double)(end - begin) / CLOCKS_PER_SEC)")
         i += 1
       }
+      //print the last elem of each array
+      /*
+      trieArrays foreach (x => {
+        print("last elem: ")
+        x.valueArray(x.lenArray(0)-1,0).print
+        print(" at index: ")
+        print(x.lenArray(0)-1)
+        print("last elem: ")
+        x.valueArray(x.lenArray(1)-1,1).print
+        print(" at index: ")
+        println(x.lenArray(1)-1)
+        })*/
       unchecked[Unit]("printf(\"Expectation triangles: 1612010 * 6 = 9672060\\n\")")
     case PrintCSV(parent) =>
       val schema = resultSchema(parent)
@@ -375,8 +386,8 @@ Data Structure Implementations
       var vend = end
       while(vstart != vend) {
         //if less than 5 elements, do linear search instead of b-search
-        /*if (vend - vstart < 5) {vstart = lsearch(lv,seekKey,vstart,vend); vend = vstart}
-        else {*/
+        if (vend - vstart < 5) {vstart = lsearch(lv,seekKey,vstart,vend); vend = vstart}
+        else {
           var diff = seekKey - valueArray(vstart,lv)
           var range = valueArray(vend-1,lv) - valueArray(vstart,lv)
           if (diff <=0 ) vend = vstart
@@ -389,7 +400,7 @@ Data Structure Implementations
             else if (pivot lessThan seekKey) {vstart = mid + 1}
             else {vend = mid}
           }
-        //}
+        }
       }
       var_assign(cursor(lv),vstart)
     }
