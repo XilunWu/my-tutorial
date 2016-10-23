@@ -198,7 +198,7 @@ Query Interpretation = Compilation
     case Group(keys, agg, parent)=> keys ++ agg
     case HashJoin(left, right)   => resultSchema(left) ++ resultSchema(right)
     case PrintCSV(parent)        => Schema()
-    case LFTJoin(parents)        =>
+    case LFTJoin(parents)        =>/*
       val schema = queryNumber match {
         case "Q5" => Schema(
           "#REGIONKEY",
@@ -215,8 +215,10 @@ Query Interpretation = Compilation
           "#PARTKEY",
           "#ORDERKEY"
           )
-      }
+      }*/
+      val schema = Schema("#X","#Y","#Z")
       schema
+    case Symbol(_,_)              => Schema() //dummy
   }
 
   def execOp(o: Operator)(yld: Record => Rep[Unit]): Rep[Unit] = o match {
@@ -255,21 +257,31 @@ Query Interpretation = Compilation
         }
       }
     case LFTJoin(parents) =>
-      val dataSize = tablesInQuery.map(t => tableSize(tpchTables indexOf t)) 
+      val dataSize = Vector(200000)//tablesInQuery.map(t => tableSize(tpchTables indexOf t)) 
       val schemaOfResult = resultSchema(LFTJoin(parents))
       //Measure data loading and preprocessing time
       unchecked[Unit]("clock_t begin, end; double time_spent")
       unchecked[Unit]("begin = clock()")
-      val trieArrays = (parents,dataSize).zipped.map { (p,size) =>
+      //1. create trieArrays for those real relations
+      //2. create iterators
+      val real = parents.filter(p => p match {
+        case Symbol(_,_) => false
+        case _ => true
+        })
+      val trieArrays = (real,dataSize).zipped.map { (p,size) =>
         val buf = new TrieArray(size, resultSchema(p), schemaOfResult)
         execOp(p) {rec => buf += rec.fields} //fields is of type Fields: Vector[RField]
         buf
       }
+      val tries = trieArrays.iterator
+      val trieArrayIterators = parents.map(p => p match {
+        case Symbol(sym, schema) => new TrieArrayIterator(trieArrays(sym), schema)
+        case _ => val trie = tries.next(); new TrieArrayIterator(trie, trie.schema)
+      }
+      )
       unchecked[Unit]("end = clock(); printf(\"Data loading: %f\\n\", (double)(end - begin) / CLOCKS_PER_SEC)")
       //Measure trie building time
-      unchecked[Unit]("begin = clock()")
-      val join = new LFTJmain(trieArrays, schemaOfResult)
-      unchecked[Unit]("end = clock(); printf(\"Trie building: %f\\n\", (double)(end - begin) / CLOCKS_PER_SEC)")
+      val join = new LFTJmain(trieArrayIterators, schemaOfResult)
       var i = 0
       while(i < 1) {
         unchecked[Unit]("begin = clock()")
@@ -277,10 +289,12 @@ Query Interpretation = Compilation
         unchecked[Unit]("end = clock(); printf(\"Join: %f\\n\", (double)(end - begin) / CLOCKS_PER_SEC)")
         i += 1
       }
+      unchecked[Unit]("printf(\"Expectation triangles: 1612010 * 6 = 9672060\\n\")")
     case PrintCSV(parent) =>
       val schema = resultSchema(parent)
       printSchema(schema)
       execOp(parent) { rec => printFields(rec.fields) }
+    case Symbol(_,_) => unit()
   }
   def execQuery(q: Operator): Unit = execOp(q) { _ => }
 
@@ -300,36 +314,16 @@ Data Structure Implementations
     else
       unit()
   }
-  class TrieArray (dataSize: Int, schema: Schema, schemaOfResult: Schema) {
-    val valueArray = new ArrayBuffer(dataSize, schema)
-    val indexArray = schema.map(f => NewArray[Int](dataSize))
-    val lenArray = schema.map{f => var_new[Int](0)}
+  class TrieArrayIterator(ta: TrieArray, schema: Schema) {
+    val schemaOfResult = ta.schemaOfResult
+    val valueArray = ta.valueArray
+    val indexArray = ta.indexArray
+    val lenArray = ta.lenArray
     val cursor = schema.map{f => var_new[Int](0)}
     val flagTable = schemaOfResult.map(f => schema contains f)
     val levelTable = schema.map(f => schemaOfResult indexOf f)
     def hasCol(i: Int): Boolean = (i >= 0) && (i < schemaOfResult.length) && flagTable(i)
     def levelOf(i : Int): Int = levelTable indexOf i
-    def +=(x: Fields):Rep[Unit] = {
-      var diff = false
-      x.foreach { xx =>
-        val i = x indexOf xx
-        if (lenArray(i) == 0) diff = true
-        else if (!diff) diff = !(valueArray((lenArray(i)-1),i) compare xx)
-        if (diff) {
-          valueArray.update(lenArray(i),i,xx)
-          if (i != schema.length - 1) indexArray(i)(lenArray(i)) = lenArray(i+1)          
-          lenArray(i)+=1
-        }
-      }
-    }
-    def output:Rep[Unit] = {
-      schema.foreach{ a =>
-        val i = schema indexOf a
-        var j = 0
-        while (j < lenArray(i)) {valueArray(j,i).print; print(" "); j+=1}
-        println("")
-      }
-    }
     def key(level:Int): RField = {
       val lv:Int = levelOf(level)
       valueArray(cursor(lv),lv)
@@ -433,6 +427,33 @@ Data Structure Implementations
     }
   }
 
+  class TrieArray (dataSize: Int, val schema: Schema, val schemaOfResult: Schema) {
+    val valueArray = new ArrayBuffer(dataSize, schema)
+    val indexArray = schema.map(f => NewArray[Int](dataSize))
+    val lenArray = schema.map{f => var_new[Int](0)}
+    def +=(x: Fields):Rep[Unit] = {
+      var diff = false
+      x.foreach { xx =>
+        val i = x indexOf xx
+        if (lenArray(i) == 0) diff = true
+        else if (!diff) diff = !(valueArray((lenArray(i)-1),i) compare xx)
+        if (diff) {
+          valueArray.update(lenArray(i),i,xx)
+          if (i != schema.length - 1) indexArray(i)(lenArray(i)) = lenArray(i+1)          
+          lenArray(i)+=1
+        }
+      }
+    }
+    def output:Rep[Unit] = {
+      schema.foreach{ a =>
+        val i = schema indexOf a
+        var j = 0
+        while (j < lenArray(i)) {valueArray(j,i).print; print(" "); j+=1}
+        println("")
+      }
+    }
+  }
+
   abstract class ColBuffer
   case class IntColBuffer(data: Rep[Array[Int]]) extends ColBuffer
   case class StringColBuffer(data: Rep[Array[String]], len: Rep[Array[Int]]) extends ColBuffer
@@ -469,7 +490,7 @@ Data Structure Implementations
       Trie-Join
       --------------------------
       */
-  class LFTJmain (rels : List[TrieArray], schema: Schema){
+  class LFTJmain (rels : List[TrieArrayIterator], schema: Schema){
     //ArrayBuffer(1,schema) is inefficient
     val maxkeys = new ArrayBuffer(1, schema)
     val minkeys = new ArrayBuffer(1, schema)
