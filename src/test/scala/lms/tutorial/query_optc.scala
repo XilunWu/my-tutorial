@@ -219,6 +219,7 @@ Query Interpretation = Compilation
       val schema = Schema("#X","#Y","#Z")
       schema
     case Symbol(_,_)              => Schema() //dummy
+    case Count(parent)            => Schema("#COUNT")
   }
 
   def execOp(o: Operator)(yld: Record => Rep[Unit]): Rep[Unit] = o match {
@@ -245,6 +246,12 @@ Query Interpretation = Compilation
       hm foreach { (k,a) =>
         yld(Record(k ++ a, keys ++ agg))
       }
+    case Count(parent) =>
+      var num = 0
+      execOp(parent) { rec =>
+        num += 1
+      }
+      yld(Record(Vector[RField](RInt(num)),Schema("#COUNT")))
     case HashJoin(left, right) =>
       val keys = resultSchema(left) intersect resultSchema(right)
       val hm = new HashMapBuffer(keys, resultSchema(left))
@@ -257,7 +264,7 @@ Query Interpretation = Compilation
         }
       }
     case LFTJoin(parents) =>
-      val dataSize = Vector(200000)//tablesInQuery.map(t => tableSize(tpchTables indexOf t)) 
+      val dataSize = Vector(30494867)//tablesInQuery.map(t => tableSize(tpchTables indexOf t)) 
       val schemaOfResult = resultSchema(LFTJoin(parents))
       //Measure data loading and preprocessing time
       unchecked[Unit]("clock_t begin, end; double time_spent")
@@ -300,7 +307,6 @@ Query Interpretation = Compilation
         print(" at index: ")
         println(x.lenArray(1)-1)
         })*/
-      unchecked[Unit]("printf(\"Expectation triangles: 1612010 * 6 = 9672060\\n\")")
     case PrintCSV(parent) =>
       val schema = resultSchema(parent)
       printSchema(schema)
