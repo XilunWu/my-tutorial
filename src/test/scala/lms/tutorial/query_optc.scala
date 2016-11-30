@@ -272,33 +272,34 @@ Query Interpretation = Compilation
       //2. create iterators
       sealed abstract class Relation
       case class Origin(name: String) extends Relation
-      case class Duplicate(index: Int) extends Relation
+      case class Duplicate(index: Int, schema: Schema) extends Relation
+      val schemas = parents.map(p => resultSchema(p))
       val rels = names.zipWithIndex.map{ case (name,index) =>
         val first = names indexOf name
         if (first == index) Origin(name)
-        else Duplicate(first)
+        else Duplicate(first,schemas(index))
       }
       val trieArrays = (parents,rels,dataSize).zipped.map { case (p,r,size) => r match {
         case Origin(name)  => 
           val buf = new TrieArray(size, resultSchema(p), schemaOfResult)
           execOp(p) {rec => buf += rec.fields} //fields is of type Fields: Vector[RField]
           Some(buf)
-        case Duplicate(_) =>
+        case Duplicate(_,_) =>
           None
       }}
       val trieArrayIterators = rels.map(r => r match {
         case Origin(name) =>  
-          println(name)
+          //println(name)
           val t = trieArrays(names indexOf name) match {
             case Some(buf) => buf
           }
           new TrieArrayIterator(t, t.schema)
-        case Duplicate(index) =>           
-          println(index)
+        case Duplicate(index,schema) =>           
+          //println(schema)
           val t = trieArrays(index) match {
             case Some(buf) => buf
           }          
-          new TrieArrayIterator(t, t.schema)
+          new TrieArrayIterator(t, schema)
       })
       unchecked[Unit]("end = clock(); printf(\"Data loading: %f\\n\", (double)(end - begin) / CLOCKS_PER_SEC)")
       //Measure trie building time
