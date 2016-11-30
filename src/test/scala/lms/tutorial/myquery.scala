@@ -27,47 +27,12 @@ class LFTjoinQueryTest extends TutorialFunSuite {
     def parsedQuery: Operator = if (query.isEmpty) expectedAstForTest(name) else parseSql(query)
   }
 
-  trait PlainTestDriver extends TestDriver with PlainQueryProcessor {
-    override def dynamicFilePath(table: String): Table = if (table == "?") defaultEvalTable else filePath(table)
-    def eval(fn: Table): Unit = {
-      execQuery(PrintCSV(parsedQuery))
-    }
-  }
-
   trait StagedTestDriver extends TestDriver with StagedQueryProcessor {
     var dynamicFileName: Table = _
     override def dynamicFilePath(table: String): Table = if (table == "?") dynamicFileName else unit(filePath(table))
     def snippet(fn: Table): Rep[Unit] = {
       dynamicFileName = fn
       execQuery(PrintCSV(parsedQuery))
-    }
-  }
-
-  abstract class ScalaPlainQueryDriver(val name: String, val query: String) extends PlainTestDriver with QueryProcessor { q =>
-    override def runtest: Unit = {
-      test(version+" "+name) {
-        for (expectedParsedQuery <- expectedAstForTest.get(name)) {
-          assert(expectedParsedQuery==parsedQuery)
-        }
-        checkOut(name, "csv", eval(defaultEvalTable))
-      }
-    }
-  }
-
-  abstract class ScalaStagedQueryDriver(val name: String, val query: String) extends DslDriver[String,Unit] with StagedTestDriver with StagedQueryProcessor with ScannerExp { q =>
-    override val codegen = new DslGen with ScalaGenScanner {
-      val IR: q.type = q
-    }
-    override def runtest: Unit = {
-      if (version == "query_staged0" && List("Group","HashJoin").exists(parsedQuery.toString contains _)) return ()
-      test(version+" "+name) {
-        for (expectedParsedQuery <- expectedAstForTest.get(name)) {
-          assert(expectedParsedQuery==parsedQuery)
-        }
-        check(name, code)
-        precompile
-        //checkOut(name, "csv", eval(defaultEvalTable))
-      }
     }
   }
 
@@ -90,9 +55,6 @@ class LFTjoinQueryTest extends TutorialFunSuite {
   def testquery(name: String, query: String = "") {
     val drivers: List[TestDriver] =
       List(
-//        new ScalaPlainQueryDriver(name, query) with query_unstaged.QueryInterpreter,
-//        new ScalaStagedQueryDriver(name, query) with query_staged0.QueryCompiler,
-//        new ScalaStagedQueryDriver(name, query) with query_staged.QueryCompiler,
         new CStagedQueryDriver(name, query) with query_optc.QueryCompiler {
           // FIXME: hack so i don't need to replace Value -> #Value in all the files right now
           override def isNumericCol(s: String) = s == "Value" || super.isNumericCol(s)
@@ -121,9 +83,9 @@ class LFTjoinQueryTest extends TutorialFunSuite {
     val scan_supplier = Scan("../../../data/"+query+"/supplier"+postfix,Some(Schema("#SUPPKEY","S_NAME","S_ADDRESS","#NATIONKEY","S_PHONE","S_ACCTBAL","S_COMMENT")),Some('\t'))
     val scan_part = Scan("../../../data/"+query+"/part"+postfix,Some(Schema("#PARTKEY","P_NAME","P_MFGR","P_BRAND","P_TYPE","P_SIZE","P_CONTAINER","P_RETAILPRICE","P_COMMENT")),Some('\t'))
     val scan_partsupp = Scan("../../../data/"+query+"/partsupp"+postfix,Some(Schema("#PARTKEY","#SUPPKEY","PS_AVAILQTY","PS_SUPPLYCOST","PS_COMMENT")),Some('\t'))
-    val scan_gplus_edge = Scan("../../../data/"+query+"/g+/gplus_coded.txt",Some(Schema("#X", "#Y", "Z")),Some('\t'))
+    val scan_gplus_edge = Scan("../../../data/"+query+"/g+/gplus_coded.txt",Some(Schema("#X", "#Y", "Z")),Some(' '))
 
-    val expectedAstForTest = Map(
+    val expectedAstForTest = Map(/*
       "Q5" -> Group(Schema("N_NAME"), Schema("#COUNT"),  //Here we need hack Group to support count(*)
         LFTJoin(List(
           Project(Schema("#REGIONKEY","#NATIONKEY","N_NAME"), Schema("#REGIONKEY","#NATIONKEY","N_NAME"), scan_nation),
@@ -171,12 +133,11 @@ class LFTjoinQueryTest extends TutorialFunSuite {
             Schema("#SUPPKEY","#PARTKEY"),
             Schema("#SUPPKEY","#PARTKEY"),
             scan_partsupp)
-        ))),
+        ))),*/
       "TRIANGLE" -> Count(LFTJoin(List(
           Project(Schema("#X", "#Y"), Schema("#X", "#Y"), scan_gplus_edge),
           Project(Schema("#Y", "#Z"), Schema("#X", "#Y"), scan_gplus_edge),
-          Project(Schema("#X", "#Z"), Schema("#X", "#Y"), scan_gplus_edge)
-        )))
+          Project(Schema("#X", "#Y"), Schema("#X", "#Y"), scan_gplus_edge)), List("Edge","Edge","Edge")))
     )
   }
 

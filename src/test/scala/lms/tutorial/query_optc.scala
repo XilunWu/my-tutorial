@@ -198,7 +198,7 @@ Query Interpretation = Compilation
     case Group(keys, agg, parent)=> keys ++ agg
     case HashJoin(left, right)   => resultSchema(left) ++ resultSchema(right)
     case PrintCSV(parent)        => Schema()
-    case LFTJoin(parents)        =>/*
+    case LFTJoin(parents, names)        =>/*
       val schema = queryNumber match {
         case "Q5" => Schema(
           "#REGIONKEY",
@@ -218,7 +218,6 @@ Query Interpretation = Compilation
       }*/
       val schema = Schema("#X","#Y","#Z")
       schema
-    case Symbol(_,_)              => Schema() //dummy
     case Count(parent)            => Schema("#COUNT")
   }
 
@@ -263,27 +262,43 @@ Query Interpretation = Compilation
           yld(Record(rec1.fields ++ rec2.fields, rec1.schema ++ rec2.schema))
         }
       }
-    case LFTJoin(parents) =>
-      val dataSize = Vector(30494867)//tablesInQuery.map(t => tableSize(tpchTables indexOf t)) 
-      val schemaOfResult = resultSchema(LFTJoin(parents))
+    case LFTJoin(parents, names) =>
+      val dataSize = Vector(30494867,30494867,30494867)//tablesInQuery.map(t => tableSize(tpchTables indexOf t)) 
+      val schemaOfResult = resultSchema(LFTJoin(parents, names))
       //Measure data loading and preprocessing time
       unchecked[Unit]("clock_t begin, end; double time_spent")
       unchecked[Unit]("begin = clock()")
       //1. create trieArrays for those real relations
       //2. create iterators
-      val real = parents.filter(p => p match {
-        case Symbol(_,_) => false
-        case _ => true
-        })
-      val trieArrays = (real,dataSize).zipped.map { (p,size) =>
-        val buf = new TrieArray(size, resultSchema(p), schemaOfResult)
-        execOp(p) {rec => buf += rec.fields} //fields is of type Fields: Vector[RField]
-        buf
+      sealed abstract class Relation
+      case class Origin(name: String) extends Relation
+      case class Duplicate(index: Int) extends Relation
+      val rels = names.zipWithIndex.map{ case (name,index) =>
+        val first = names indexOf name
+        if (first == index) Origin(name)
+        else Duplicate(first)
       }
-      val tries = trieArrays.iterator
-      val trieArrayIterators = parents.map(p => p match {
-        case Symbol(sym, schema) => new TrieArrayIterator(trieArrays(sym), schema)
-        case _ => val trie = tries.next(); new TrieArrayIterator(trie, trie.schema)
+      val trieArrays = (parents,rels,dataSize).zipped.map { case (p,r,size) => r match {
+        case Origin(name)  => 
+          val buf = new TrieArray(size, resultSchema(p), schemaOfResult)
+          execOp(p) {rec => buf += rec.fields} //fields is of type Fields: Vector[RField]
+          Some(buf)
+        case Duplicate(_) =>
+          None
+      }}
+      val trieArrayIterators = rels.map(r => r match {
+        case Origin(name) =>  
+          println(name)
+          val t = trieArrays(names indexOf name) match {
+            case Some(buf) => buf
+          }
+          new TrieArrayIterator(t, t.schema)
+        case Duplicate(index) =>           
+          println(index)
+          val t = trieArrays(index) match {
+            case Some(buf) => buf
+          }          
+          new TrieArrayIterator(t, t.schema)
       })
       unchecked[Unit]("end = clock(); printf(\"Data loading: %f\\n\", (double)(end - begin) / CLOCKS_PER_SEC)")
       //Measure trie building time
@@ -311,7 +326,6 @@ Query Interpretation = Compilation
       val schema = resultSchema(parent)
       printSchema(schema)
       execOp(parent) { rec => printFields(rec.fields) }
-    case Symbol(_,_) => unit()
   }
   def execQuery(q: Operator): Unit = execOp(q) { _ => }
 
@@ -460,7 +474,7 @@ Data Structure Implementations
           lenArray(i)+=1
         }
       }
-    }
+    }/*
     def output:Rep[Unit] = {
       schema.foreach{ a =>
         val i = schema indexOf a
@@ -468,7 +482,7 @@ Data Structure Implementations
         while (j < lenArray(i)) {valueArray(j,i).print; print(" "); j+=1}
         println("")
       }
-    }
+    }*/
   }
 
   abstract class ColBuffer
