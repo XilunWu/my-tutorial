@@ -51,6 +51,7 @@ cd src/out
 # for Snyder
 # module load gcc/5.2.0 
 # gcc -L/$HOME/.linuxbrew/lib -Wl,-rpath=$HOME/.linuxbrew/lib -Wall -o test lftjquery_Q5.check.c
+# gcc -L/$HOME/.linuxbrew/lib -Wl,-rpath=$HOME/.linuxbrew/lib -o test lftjquery_TRIANGLE.check.c
 time(gcc lftjquery_TRIANGLE.check.c -o test) && time (./test 1 > ../result.txt)
 cat ../result.txt
 cd ../../

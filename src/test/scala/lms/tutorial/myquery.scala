@@ -83,7 +83,7 @@ class LFTjoinQueryTest extends TutorialFunSuite {
     val scan_supplier = Scan("../../../data/"+query+"/supplier"+postfix,Some(Schema("#SUPPKEY","S_NAME","S_ADDRESS","#NATIONKEY","S_PHONE","S_ACCTBAL","S_COMMENT")),Some('\t'))
     val scan_part = Scan("../../../data/"+query+"/part"+postfix,Some(Schema("#PARTKEY","P_NAME","P_MFGR","P_BRAND","P_TYPE","P_SIZE","P_CONTAINER","P_RETAILPRICE","P_COMMENT")),Some('\t'))
     val scan_partsupp = Scan("../../../data/"+query+"/partsupp"+postfix,Some(Schema("#PARTKEY","#SUPPKEY","PS_AVAILQTY","PS_SUPPLYCOST","PS_COMMENT")),Some('\t'))
-    val scan_gplus_edge = Scan("../../../data/"+query+"/g+/gplus_coded.txt",Some(Schema("#X", "#Y", "Z")),Some(' '))
+    val scan_gplus_edge = Scan("../../../data/"+query+"/gplus/gplus_coded.txt",Some(Schema("#X", "#Y", "Z")),Some(' '))
 
     val expectedAstForTest = Map(/*
       "Q5" -> Group(Schema("N_NAME"), Schema("#COUNT"),  //Here we need hack Group to support count(*)
@@ -137,7 +137,7 @@ class LFTjoinQueryTest extends TutorialFunSuite {
       "TRIANGLE" -> Count(LFTJoin(List(
           Project(Schema("#X", "#Y"), Schema("#X", "#Y"), scan_gplus_edge),
           Project(Schema("#Y", "#Z"), Schema("#X", "#Y"), scan_gplus_edge),
-          Project(Schema("#X", "#Y"), Schema("#X", "#Y"), scan_gplus_edge)), List("Edge","Edge","Edge")))
+          Project(Schema("#X", "#Z"), Schema("#X", "#Y"), scan_gplus_edge)), List("Edge","Edge","Edge")))
     )
   }
 
