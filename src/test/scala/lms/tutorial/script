@@ -43,6 +43,9 @@ sed -i 's/|/\t/g' *.tbl
 #  sort -t$'\t' -k2,2n -k1,1n partsupp.csv -o partsupp.csv
 
 
+#  q9 example:
+#  sort -k1,1n -k2,2n -u gplus_coded.txt -o gplus_coded_unique.txt
+
 ############################
 #     run experiment
 ############################

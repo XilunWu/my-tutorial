@@ -283,6 +283,7 @@ Query Interpretation = Compilation
         case Origin(name)  => 
           val buf = new TrieArray(size, resultSchema(p), schemaOfResult)
           execOp(p) {rec => buf += rec.fields} //fields is of type Fields: Vector[RField]
+          buf.noMoreInput
           Some(buf)
         case Duplicate(_,_) =>
           None
@@ -303,6 +304,7 @@ Query Interpretation = Compilation
       })
       unchecked[Unit]("end = clock(); printf(\"Data loading: %f\\n\", (double)(end - begin) / CLOCKS_PER_SEC)")
       //Measure trie building time
+      //trieArrayIterators.foreach(t => t.traversal)
       val join = new LFTJmain(trieArrayIterators, schemaOfResult)
       var i = 0
       while(i < 1) {
@@ -311,18 +313,6 @@ Query Interpretation = Compilation
         unchecked[Unit]("end = clock(); printf(\"Join: %f\\n\", (double)(end - begin) / CLOCKS_PER_SEC)")
         i += 1
       }
-      //print the last elem of each array
-      /*
-      trieArrays foreach (x => {
-        print("last elem: ")
-        x.valueArray(x.lenArray(0)-1,0).print
-        print(" at index: ")
-        print(x.lenArray(0)-1)
-        print("last elem: ")
-        x.valueArray(x.lenArray(1)-1,1).print
-        print(" at index: ")
-        println(x.lenArray(1)-1)
-        })*/
     case PrintCSV(parent) =>
       val schema = resultSchema(parent)
       printSchema(schema)
@@ -356,13 +346,14 @@ Data Structure Implementations
     val levelTable = schema.map(f => schemaOfResult indexOf f)
     def hasCol(i: Int): Boolean = (i >= 0) && (i < schemaOfResult.length) && flagTable(i)
     def levelOf(i : Int): Int = levelTable indexOf i
+    def traversal:Rep[Unit] = ta.traversal
     def key(level:Int): RField = {
       val lv:Int = levelOf(level)
       valueArray(cursor(lv),lv)
     }
     def open(level:Int): Rep[Unit] = {
       val lv:Int = levelOf(level)
-      if (lv == 0) var_assign(cursor(lv),0)
+      if (lv == 0) var_assign(cursor(0),0)
       else var_assign(cursor(lv),indexArray(lv-1)(cursor(lv-1)))
     }
     def next(level:Int): Rep[Unit] = {
@@ -380,7 +371,8 @@ Data Structure Implementations
       val start = readVar(cursor(lv))
       if (!(valueArray(cursor(lv),lv) compare seekKey)) {
         val end:Rep[Int] = if (lv == 0) lenArray(0) else indexArray(lv-1)(cursor(lv-1)+1)
-        interpolation_search(lv,seekKey,start,end)
+        //interpolation_search(lv,seekKey,start,end)
+        bsearch(lv,seekKey,start,end)
       }
     }
     //not good for encoded
@@ -475,15 +467,32 @@ Data Structure Implementations
           lenArray(i)+=1
         }
       }
-    }/*
-    def output:Rep[Unit] = {
+    }
+    def noMoreInput:Rep[Unit] = {
+      indexArray.zipWithIndex.foreach{ case(array,i) =>
+        if (i != schema.length - 1) array(lenArray(i)) = lenArray(i+1)
+      }
+    }
+    def traversal:Rep[Unit] = {
       schema.foreach{ a =>
         val i = schema indexOf a
         var j = 0
-        while (j < lenArray(i)) {valueArray(j,i).print; print(" "); j+=1}
+        var k = 1
+        while (j < lenArray(i)) {
+          valueArray(j,i).print
+          print(" ")
+          if (i != 0) {
+            if(j == indexArray(i-1)(k) - 1) {
+              k += 1
+              print("| ")
+            }
+          }
+          j+=1
+        }
+        println("")
         println("")
       }
-    }*/
+    }
   }
 
   abstract class ColBuffer
@@ -530,21 +539,24 @@ Data Structure Implementations
     var currLv = 0
     def run(yld: Record => Rep[Unit]) = {
       while (currLv != -1) {
-        unlift(leapFrogJoin)(yld, currLv, schema.length) 
+        unlift(leapFrogJoin)(yld, currLv, schema.length)
       }
       //reset all variables
       currLv = 0
       rels foreach {r => r.resetCursor}
     }
     def leapFrogJoin(level: Int, yld: Record => Rep[Unit]): Rep[Unit] = {
+      /*print("level ")
+      print(level)
+      print(": ")*/
       if (rels.filter(r => r.hasCol(level)).length > 1) search(level)
       if (level == schema.length - 1) {
-        if (atEnd(level)) {currLv -= 1; next(level-1)}
-        else {pushIntoRes(level, key(level)); next(level); yld(makeRecord)}
+        if (atEnd(level)) {currLv -= 1; next(level-1)/*; println("up")*/}
+        else {pushIntoRes(level, key(level)); next(level); yld(makeRecord)/*; print("found one:"); printFields(res(0))*/}
       }
       else {
-        if (atEnd(level)) {currLv -= 1; next(level-1)}
-        else {pushIntoRes(level, key(level)); currLv += 1; open(level+1)}
+        if (atEnd(level)) {currLv -= 1; next(level-1)/*; println("up")*/}
+        else {pushIntoRes(level, key(level)); currLv += 1; open(level+1)/*; println("open")*/}
       }
     }
     def unlift(f: (Int, Record => Rep[Unit]) => Rep[Unit])(yld: Record => Rep[Unit], numUnLift: Rep[Int], upperBound: Int, lowerBound: Int = 0, count: Int = 0): Rep[Unit] = {
@@ -554,7 +566,6 @@ Data Structure Implementations
         unlift(f)(yld, numUnLift, upperBound, lowerBound, count + 1)
       else unit() //exit
     }
-    //check atEnd after calling next()
     def next(level: Int): Rep[Unit] = {
       //call iterator.next for every iterator in vector
       rels.filter(r => r.hasCol(level)) foreach {r => r.next(level)}
