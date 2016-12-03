@@ -371,8 +371,8 @@ Data Structure Implementations
       val start = readVar(cursor(lv))
       if (!(valueArray(cursor(lv),lv) compare seekKey)) {
         val end:Rep[Int] = if (lv == 0) lenArray(0) else indexArray(lv-1)(cursor(lv-1)+1)
-        //interpolation_search(lv,seekKey,start,end)
-        bsearch(lv,seekKey,start,end)
+        interpolation_search(lv,seekKey,start,end)
+        //bsearch(lv,seekKey,start,end)
       }
     }
     //not good for encoded
